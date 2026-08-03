@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>BusinessOS</title>
+    <script>
+      // Set the theme attribute before first paint so there's no flash of the
+      // wrong theme. Mirrors the fallback logic in src/stores/theme-store.ts —
+      // keep the two in sync if that logic changes.
+      ;(function () {
+        try {
+          var stored = localStorage.getItem('businessos-theme')
+          var theme = stored ? JSON.parse(stored).state.theme : null
+          if (theme !== 'light' && theme !== 'dark') {
+            theme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+          }
+          document.documentElement.dataset.theme = theme
+        } catch (e) {
+          /* ignore — CSS media query still governs the default */
+        }
+      })()
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

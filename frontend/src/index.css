@@ -1,0 +1,209 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ---------- fonts ----------
+   IBM Plex Sans (variable, wght 100-700) + IBM Plex Mono (400/500).
+   Self-hosted — never fetched from a CDN. */
+@font-face {
+  font-family: 'Plex Sans Var';
+  src: url('./assets/fonts/plex-sans-var.woff2') format('woff2');
+  font-weight: 100 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plex Mono';
+  src: url('./assets/fonts/plex-mono-400.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Plex Mono';
+  src: url('./assets/fonts/plex-mono-500.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ---------- design tokens ----------
+   Dark mode = literal black background. Light mode = literal white background.
+   Card/surface separation is carried entirely by border + shadow, not by a bg tint. */
+@layer base {
+  :root {
+    --signal: #d9793a;
+    --signal-700: #b5622e;
+    --signal-100: #f2dec7;
+    --signal-ink: #b5622e;
+    --signal-solid: #a85a28;
+    --signal-solid-hover: #8f4a20;
+
+    --good: #5e8f62;
+    --warn: #c99a3a;
+    --critical: #bd4a4a;
+    --agent: #8c7aa8;
+    --tool: #3f8c8c;
+
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f3f3f4;
+    --surface-3: #e8e8eb;
+    --border: #e1e1e5;
+    --text: #151517;
+    --text-dim: #57575f;
+    --text-faint: #75757d;
+    --shadow:
+      0 1px 2px rgba(15, 15, 20, 0.08),
+      0 1px 1px rgba(15, 15, 20, 0.04);
+
+    --good-bg: #e3ebe3;
+    --good-text: #386138;
+    --warn-bg: #f1e5c6;
+    --warn-text: #7a5b15;
+    --critical-bg: #f5dede;
+    --critical-text: #8c2e2e;
+    --agent-bg: #eae4f0;
+    --agent-text: #5b4a78;
+    --tool-bg: #dcebeb;
+    --tool-text: #215656;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #000000;
+      --surface: #0a0a0a;
+      --surface-2: #151517;
+      --surface-3: #1e1e21;
+      --border: #2c2c31;
+      --text: #f2f2f4;
+      --text-dim: #9c9ca4;
+      --text-faint: #7e7e86;
+      --shadow:
+        0 1px 2px rgba(0, 0, 0, 0.6),
+        0 1px 1px rgba(0, 0, 0, 0.4);
+      --signal-100: #2a1d12;
+      --signal-ink: #e6975c;
+      --good-bg: #182219;
+      --good-text: #96c398;
+      --warn-bg: #2b230d;
+      --warn-text: #e8c97a;
+      --critical-bg: #2b1a1a;
+      --critical-text: #e29999;
+      --agent-bg: #201c29;
+      --agent-text: #c3b3de;
+      --tool-bg: #0f2020;
+      --tool-text: #8fcbcb;
+    }
+  }
+
+  :root[data-theme='dark'] {
+    --bg: #000000;
+    --surface: #0a0a0a;
+    --surface-2: #151517;
+    --surface-3: #1e1e21;
+    --border: #2c2c31;
+    --text: #f2f2f4;
+    --text-dim: #9c9ca4;
+    --text-faint: #7e7e86;
+    --shadow:
+      0 1px 2px rgba(0, 0, 0, 0.6),
+      0 1px 1px rgba(0, 0, 0, 0.4);
+    --signal-100: #2a1d12;
+    --signal-ink: #e6975c;
+    --good-bg: #182219;
+    --good-text: #96c398;
+    --warn-bg: #2b230d;
+    --warn-text: #e8c97a;
+    --critical-bg: #2b1a1a;
+    --critical-text: #e29999;
+    --agent-bg: #201c29;
+    --agent-text: #c3b3de;
+    --tool-bg: #0f2020;
+    --tool-text: #8fcbcb;
+  }
+
+  :root[data-theme='light'] {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f3f3f4;
+    --surface-3: #e8e8eb;
+    --border: #e1e1e5;
+    --text: #151517;
+    --text-dim: #57575f;
+    --text-faint: #75757d;
+    --shadow:
+      0 1px 2px rgba(15, 15, 20, 0.08),
+      0 1px 1px rgba(15, 15, 20, 0.04);
+    --signal-100: #f2dec7;
+    --signal-ink: #b5622e;
+    --good-bg: #e3ebe3;
+    --good-text: #386138;
+    --warn-bg: #f1e5c6;
+    --warn-text: #7a5b15;
+    --critical-bg: #f5dede;
+    --critical-text: #8c2e2e;
+    --agent-bg: #eae4f0;
+    --agent-text: #5b4a78;
+    --tool-bg: #dcebeb;
+    --tool-text: #215656;
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: theme('fontFamily.sans');
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1,
+  h2,
+  h3 {
+    margin: 0;
+    text-wrap: balance;
+    font-weight: 600;
+  }
+
+  p {
+    margin: 0;
+  }
+
+  ::selection {
+    background: var(--signal-100);
+    color: var(--text);
+  }
+
+  *:focus-visible {
+    outline: 2px solid var(--signal);
+    outline-offset: 2px;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer utilities {
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+}

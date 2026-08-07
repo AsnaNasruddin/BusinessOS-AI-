@@ -21,8 +21,9 @@ This repo is early — here's what actually exists today versus what's planned:
 | Auth + Orgs (Phase 1) | ✅ Built — JWT access/refresh, bcrypt, org create/list/invite/accept-invite, org-scoped membership enforcement. Frontend wired (login/register/org switcher). |
 | Tools + LLM abstraction (Phase 2) | ✅ Built — Agent CRUD (org-scoped), built-in tool registry, unified LLM provider interface (Ollama + Anthropic/OpenAI/Groq over plain HTTPS). Verified with a real completion through Ollama (`llama3.1:8b`, running locally via `brew services`). Frontend Agents page wired to the real API. |
 | Knowledge Base / RAG (Phase 3) | ✅ Built — KB + document CRUD, real ingestion pipeline (chunk → embed via Ollama `nomic-embed-text` → store in Chroma), retrieval endpoint. Seeded with all 11 real `seed-data/knowledge-base/` docs across 3 KBs; verified with a live semantic query returning correct, relevant chunks. Frontend KB page wired to the real API (read path only — upload UI still a placeholder). Only plain-text formats (.md/.txt/.html) are parsed so far, not PDF/DOCX. |
-| Workflow engine v0 (Phase 4) | ✅ Built — Workflow/Run/Step models, a graph validator (`app/workflows/graph.py`) enforcing v0's linear-chain constraint (no condition/approval/parallel/merge yet — those need Phase 5), a real execution engine dispatching trigger/agent/tool/end nodes, Celery-backed async runs. `search_kb` tool nodes run the real Phase 3 RAG pipeline; other tools are honest stubs (no email/CRM/HTTP integrations exist yet). Verified via the real API → Celery → worker path, not just direct calls. |
-| Approvals, Memory (Phases 5–6) | ⏳ Not started |
+| Workflow engine v0 (Phase 4) | ✅ Built — Workflow/Run/Step models, a graph validator (`app/workflows/graph.py`), a real execution engine dispatching trigger/agent/tool/end nodes, Celery-backed async runs. `search_kb` tool nodes run the real Phase 3 RAG pipeline; other tools are honest stubs (no email/CRM/HTTP integrations exist yet). Verified via the real API → Celery → worker path, not just direct calls. |
+| Branches + approvals (Phase 5) | ✅ Built — the graph validator now accepts `condition` (evaluates a field/operator/value against the run's context, picks one of two edges), `parallel`/`merge` (fan-out to N branches, a matched `merge` joins them — structurally required to trace back to the same `parallel` node, so a run can never hang waiting on a branch a `condition` didn't take), and `approval` (pauses the run, snapshots its context/state to the DB). `POST /approvals/{id}/decide` either resumes execution via a new Celery task or ends the run — same commit-before-enqueue pattern as triggering a run. Found and fixed a real bug along the way: a Celery worker processing a second async task in the same process crashed with an asyncpg "attached to a different loop" error, since each task gets its own `asyncio.run()` loop but the DB engine's connection pool was created once at import time — fixed by disposing the pool after every task. Frontend Approvals page wired to the real API, including the Approve/Reject buttons (previously present but not actually calling the backend). Verified end-to-end through the real API → Celery → worker path for both the pause and the resume. |
+| Memory (Phase 6) | ⏳ Not started |
 | Natural Language Workflow Generator (Phase 7) | 📝 Spec'd, not built — see [`docs/`](docs/) |
 
 The frontend is real, runnable code — it's just not wired to anything yet. Every
@@ -126,7 +127,7 @@ addendum's own Rule 13/14 additions for the standing convention.
 2. ✅ Tools + LLM abstraction
 3. ✅ Knowledge Base (RAG)
 4. ✅ Workflow engine v0 (linear execution)
-5. Branches + approvals
+5. ✅ Branches + approvals
 6. Memory + observability
 7. **Natural Language Workflow Generator** *(new — see docs/)*
 8. Polish + docs

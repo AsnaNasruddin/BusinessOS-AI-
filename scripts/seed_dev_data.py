@@ -16,14 +16,21 @@ from pathlib import Path
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.database.models import User
+from app.database.models import Approval, User
 from app.database.session import async_session_maker
 from app.rag.ingest import ingest_document
 from app.schemas.agent import AgentCreate
 from app.schemas.kb import KnowledgeBaseCreate
 from app.schemas.workflow import WorkflowCreate
-from app.services import agent_service, auth_service, kb_service, org_service, workflow_service
-from app.workflows.executor import execute_workflow
+from app.services import (
+    agent_service,
+    approval_service,
+    auth_service,
+    kb_service,
+    org_service,
+    workflow_service,
+)
+from app.workflows.executor import execute_workflow, resume_workflow
 
 SEED_DATA_DIR = Path(__file__).parent.parent / "seed-data"
 
@@ -306,6 +313,182 @@ async def create_demo_workflows(org_id) -> None:
         print(f"  run finished — status={run.status!r}, total_tokens={run.total_tokens}")
 
 
+DEMO_BRANCHING_WORKFLOW_NAME = "Refund Request Router"
+
+
+async def create_demo_branching_workflow(org_id) -> None:
+    """Phase 5 (Branches + approvals). Exercises every Phase 5 node kind in
+    one graph: `condition` (refunds over $200 need review, smaller ones
+    don't), `approval` (a real pause point), and a `parallel`/`merge` pair
+    (notify by email and log the activity at the same time, then join
+    before ending). Runs it once, auto-approving the pending Approval the
+    same way POST /approvals/{id}/decide would — the point is a real,
+    finished run to look at, not a hand-written one."""
+    async with async_session_maker() as db:
+        existing = await workflow_service.list_workflows(db, org_id=org_id)
+        if any(w.name == DEMO_BRANCHING_WORKFLOW_NAME for w in existing):
+            print(f"  workflow '{DEMO_BRANCHING_WORKFLOW_NAME}' already exists, skipping")
+            return
+
+        agents = await agent_service.list_agents(db, org_id=org_id)
+        triage_agent = next((a for a in agents if a.name == "Triage Classifier"), None)
+        if triage_agent is None:
+            print("  Triage Classifier agent not found — run create_demo_agents() first")
+            return
+
+        graph = {
+            "nodes": [
+                {
+                    "id": "t",
+                    "type": "trigger",
+                    "position": {"x": 0, "y": 40},
+                    "data": {"label": "Refund Requested", "sub": "trigger · manual"},
+                },
+                {
+                    "id": "a",
+                    "type": "agent",
+                    "position": {"x": 200, "y": 40},
+                    "data": {
+                        "label": "Triage Classifier",
+                        "sub": "agent",
+                        "agentId": str(triage_agent.id),
+                    },
+                },
+                {
+                    "id": "c",
+                    "type": "condition",
+                    "position": {"x": 420, "y": 40},
+                    "data": {
+                        "label": "Amount > $200?",
+                        "sub": "condition",
+                        "field": "trigger.amount",
+                        "operator": "gt",
+                        "value": 200,
+                    },
+                },
+                {
+                    "id": "k_auto",
+                    "type": "tool",
+                    "position": {"x": 640, "y": 160},
+                    "data": {
+                        "label": "log_activity",
+                        "sub": "tool · auto-approved",
+                        "toolName": "log_activity",
+                    },
+                },
+                {
+                    "id": "ap",
+                    "type": "approval",
+                    "position": {"x": 640, "y": -80},
+                    "data": {"label": "Manager Review", "sub": "approval · required"},
+                },
+                {
+                    "id": "p",
+                    "type": "parallel",
+                    "position": {"x": 860, "y": -80},
+                    "data": {"label": "Notify", "sub": "parallel · fan-out"},
+                },
+                {
+                    "id": "k_email",
+                    "type": "tool",
+                    "position": {"x": 1080, "y": -160},
+                    "data": {"label": "send_email", "sub": "tool", "toolName": "send_email"},
+                },
+                {
+                    "id": "k_log",
+                    "type": "tool",
+                    "position": {"x": 1080, "y": 0},
+                    "data": {"label": "log_activity", "sub": "tool", "toolName": "log_activity"},
+                },
+                {
+                    "id": "m",
+                    "type": "merge",
+                    "position": {"x": 1300, "y": -80},
+                    "data": {"label": "Join", "sub": "merge"},
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "position": {"x": 1500, "y": 40},
+                    "data": {"label": "Resolved", "sub": "end"},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "t", "target": "a"},
+                {"id": "e2", "source": "a", "target": "c"},
+                {"id": "e3", "source": "c", "target": "ap", "sourceHandle": "yes"},
+                {"id": "e4", "source": "c", "target": "k_auto", "sourceHandle": "no"},
+                {"id": "e5", "source": "ap", "target": "p"},
+                {"id": "e6", "source": "p", "target": "k_email"},
+                {"id": "e7", "source": "p", "target": "k_log"},
+                {"id": "e8", "source": "k_email", "target": "m"},
+                {"id": "e9", "source": "k_log", "target": "m"},
+                {"id": "e10", "source": "m", "target": "e"},
+                {"id": "e11", "source": "k_auto", "target": "e"},
+            ],
+        }
+
+        workflow = await workflow_service.create_workflow(
+            db,
+            org_id=org_id,
+            data=WorkflowCreate(
+                name=DEMO_BRANCHING_WORKFLOW_NAME,
+                description=(
+                    "Refunds over $200 need manager approval before notifying the customer and "
+                    "logging it; smaller ones auto-log without review."
+                ),
+                trigger_type="manual",
+                graph=graph,
+            ),
+        )
+        await db.commit()
+        print(f"  created workflow '{DEMO_BRANCHING_WORKFLOW_NAME}'")
+
+        run = await workflow_service.create_run(
+            db,
+            workflow=workflow,
+            trigger_payload={
+                "amount": 420,
+                "customer": "Priya Shah",
+                "reason": "damaged unit on arrival",
+            },
+        )
+        await db.commit()
+        print(f"  triggered run {run.id} (amount=420 -> should hit the approval branch)")
+
+        try:
+            await execute_workflow(run.id, db, get_settings())
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 - report and move on, don't abort the whole seed
+            print(f"  FAILED to execute demo run: {exc}")
+            return
+
+        await db.refresh(run)
+        print(f"  run paused at: status={run.status!r}")
+
+        if run.status == "awaiting_approval":
+            pending = await db.execute(
+                select(Approval).where(Approval.run_id == run.id, Approval.status == "pending")
+            )
+            approval = pending.scalar_one()
+            await approval_service.approve_approval(
+                db, approval=approval, decided_by="Jordan Avery (seed script)"
+            )
+            await db.commit()
+            print(f"  auto-approved approval {approval.id}, resuming...")
+
+            try:
+                await resume_workflow(run.id, approval.node_id, db, get_settings())
+                await db.commit()
+            except Exception as exc:  # noqa: BLE001
+                print(f"  FAILED to resume demo run: {exc}")
+                return
+
+            await db.refresh(run)
+
+        print(f"  run finished — status={run.status!r}, total_tokens={run.total_tokens}")
+
+
 async def main() -> None:
     print("Seeding BusinessOS AI dev data...")
     print("Org + user:")
@@ -316,6 +499,7 @@ async def main() -> None:
     await create_demo_knowledge_bases(org_id)
     print("Workflows:")
     await create_demo_workflows(org_id)
+    await create_demo_branching_workflow(org_id)
     print("Done.")
 
 

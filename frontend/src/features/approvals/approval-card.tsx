@@ -39,14 +39,14 @@ export function ApprovalCard({ approval }: { approval: ApprovalRequest }) {
           <Button
             variant="primary"
             disabled={decide.isPending}
-            onClick={() => decide.mutate({ id: approval.id, status: 'approved' })}
+            onClick={() => decide.mutate({ id: approval.id, status: 'approved', comment: comment || undefined })}
           >
             Approve
           </Button>
           <Button
             variant="outlineCritical"
             disabled={decide.isPending}
-            onClick={() => decide.mutate({ id: approval.id, status: 'rejected' })}
+            onClick={() => decide.mutate({ id: approval.id, status: 'rejected', comment: comment || undefined })}
           >
             Reject
           </Button>

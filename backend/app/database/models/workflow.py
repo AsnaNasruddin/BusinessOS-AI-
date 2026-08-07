@@ -46,6 +46,16 @@ class WorkflowRun(Base):
     total_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     total_cost_usd: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     error_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Checkpoint written whenever the run pauses at an `approval` node (and
+    # kept up to date otherwise) so app.workflows.executor.resume_workflow
+    # can pick execution back up after a human decides — {node_id: output}
+    # for every node that's already run, exactly what a fresh run's
+    # in-memory `context` dict holds.
+    context: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Edge ids the executor has already marked "taken" — needed on resume so
+    # a condition node's chosen branch (the one edge out of two) isn't
+    # re-decided or lost.
+    active_edge_ids: Mapped[list | None] = mapped_column(JSON, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

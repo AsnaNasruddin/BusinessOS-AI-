@@ -3,6 +3,7 @@
 # log.py (Phase 2+). Alembic's autogenerate reads Base.metadata, so a model
 # that isn't imported here is invisible to migrations.
 from app.database.models.agent import Agent
+from app.database.models.approval import Approval
 from app.database.models.base import Base
 from app.database.models.kb import KbDocument, KnowledgeBase
 from app.database.models.org import Membership, Organization
@@ -20,4 +21,5 @@ __all__ = [
     "Workflow",
     "WorkflowRun",
     "WorkflowStep",
+    "Approval",
 ]

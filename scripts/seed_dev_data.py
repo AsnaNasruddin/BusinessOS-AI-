@@ -16,10 +16,13 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+from app.config import get_settings
 from app.database.models import User
 from app.database.session import async_session_maker
+from app.rag.ingest import ingest_document
 from app.schemas.agent import AgentCreate
-from app.services import agent_service, auth_service, org_service
+from app.schemas.kb import KnowledgeBaseCreate
+from app.services import agent_service, auth_service, kb_service, org_service
 
 SEED_DATA_DIR = Path(__file__).parent.parent / "seed-data"
 
@@ -86,6 +89,13 @@ DEMO_AGENTS = [
     },
 ]
 
+# folder under seed-data/knowledge-base/ -> (display name, description) — see seed-data/README.md
+DEMO_KBS = {
+    "policy-refunds": ("Policy & Refunds", "Returns, warranty, and chargeback policy."),
+    "support-macros": ("Support Macros", "Canned replies and escalation scripts."),
+    "product-docs": ("Product Docs", "Manuals and FAQs."),
+}
+
 
 async def create_demo_org_and_user():
     """Phase 1 (Auth + Orgs). Creates the demo user and 'Acme Robotics' org
@@ -132,12 +142,73 @@ async def create_demo_agents(org_id) -> None:
 async def create_demo_knowledge_bases(org_id) -> None:
     """Phase 3 (Knowledge Base / RAG). Walks seed-data/knowledge-base/,
     creates one KnowledgeBase per subfolder, and runs each .md file through
-    the REAL ingestion pipeline (app/rag/ingest.py) — not hand-written
-    Chunk rows. See seed-data/README.md for the folder-to-KB mapping."""
-    if not SEED_DATA_DIR.exists():
-        print(f"seed-data/ not found at {SEED_DATA_DIR} — nothing to ingest yet.")
+    the real ingestion pipeline (app/rag/ingest.py) — not hand-written
+    chunk rows, per seed-data/README.md."""
+    kb_root = SEED_DATA_DIR / "knowledge-base"
+    if not kb_root.exists():
+        print(f"  {kb_root} not found — nothing to ingest.")
         return
-    print("TODO(phase 3): ingest seed-data/knowledge-base/ through the real pipeline")
+
+    settings = get_settings()
+
+    for folder_name, (display_name, description) in DEMO_KBS.items():
+        folder = kb_root / folder_name
+        if not folder.exists():
+            print(f"  {folder} not found, skipping")
+            continue
+
+        async with async_session_maker() as db:
+            existing_kbs = await kb_service.list_kbs(db, org_id=org_id)
+            kb = next(
+                (row_kb for row_kb, _count in existing_kbs if row_kb.name == display_name), None
+            )
+            if kb is None:
+                kb = await kb_service.create_kb(
+                    db,
+                    org_id=org_id,
+                    data=KnowledgeBaseCreate(name=display_name, description=description),
+                )
+                await db.commit()
+                print(f"  created KB '{display_name}'")
+            else:
+                print(f"  KB '{display_name}' already exists, reusing")
+
+            existing_filenames = {
+                d.filename for d in await kb_service.list_documents(db, kb_id=kb.id)
+            }
+
+            for md_file in sorted(folder.glob("*.md")):
+                if md_file.name in existing_filenames:
+                    print(f"    {md_file.name} already ingested, skipping")
+                    continue
+
+                text = md_file.read_text()
+                document = await kb_service.create_document(
+                    db,
+                    kb_id=kb.id,
+                    filename=md_file.name,
+                    mime_type="Markdown",
+                    size_bytes=len(text.encode()),
+                )
+                await db.commit()
+
+                try:
+                    chunk_count = await ingest_document(
+                        kb_id=kb.id,
+                        document_id=document.id,
+                        filename=document.filename,
+                        text=text,
+                        settings=settings,
+                    )
+                except Exception as exc:  # noqa: BLE001 - genuinely want to catch+record any failure here
+                    await kb_service.mark_document_failed(db, document=document, error=str(exc))
+                    await db.commit()
+                    print(f"    FAILED to ingest {md_file.name}: {exc}")
+                    continue
+
+                await kb_service.mark_document_ready(db, document=document, chunk_count=chunk_count)
+                await db.commit()
+                print(f"    ingested {md_file.name} -> {chunk_count} chunks")
 
 
 async def create_demo_workflows(org_id) -> None:

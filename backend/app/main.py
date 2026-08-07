@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1 import agents, auth, orgs, tools
+from app.api.v1 import agents, auth, kb, orgs, tools
 from app.config import get_settings
 
 settings = get_settings()
@@ -36,8 +36,8 @@ app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 app.include_router(orgs.router, prefix="/api/v1/orgs", tags=["orgs"])
 app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
 app.include_router(tools.router, prefix="/api/v1/tools", tags=["tools"])
+app.include_router(kb.router, prefix="/api/v1/kbs", tags=["knowledge-bases"])
 
-# Phase 3+ mounts routers here as they're built:
-#   from app.api.v1 import kb
+# Phase 4+ mounts routers here as they're built:
 #   from app.api.v1 import workflows, runs, approvals, dashboard, analytics
 #   ...

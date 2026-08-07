@@ -61,6 +61,8 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+      - ./scripts:/app/scripts
+      - ./seed-data:/app/seed-data
     extra_hosts:
       - "host.docker.internal:host-gateway"
     depends_on:

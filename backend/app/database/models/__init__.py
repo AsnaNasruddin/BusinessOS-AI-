@@ -4,6 +4,7 @@
 # that isn't imported here is invisible to migrations.
 from app.database.models.agent import Agent
 from app.database.models.base import Base
+from app.database.models.kb import KbDocument, KnowledgeBase
 from app.database.models.org import Membership, Organization
 from app.database.models.user import User
 
@@ -13,4 +14,6 @@ __all__ = [
     "Organization",
     "Membership",
     "Agent",
+    "KnowledgeBase",
+    "KbDocument",
 ]

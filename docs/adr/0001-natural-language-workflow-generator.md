@@ -2,6 +2,9 @@
 
 **Status:** Accepted
 **Date:** 2026-08-03
+**Updated:** 2026-08-05 — naming reconciled against real Phase 1-3 code (`app.llm`
+provider abstraction, not `LLMClient`). See the addendum's reconciliation note for
+a prerequisite gap this surfaced (agents don't have a tool-calling loop yet).
 **Extends:** Implementation Plan v1.0
 **Full spec:** [`docs/implementation-plan-addendum-nl-workflow-generator.md`](../implementation-plan-addendum-nl-workflow-generator.md)
 
@@ -20,7 +23,8 @@ Add a **Natural Language Workflow Generator** as a planning layer that sits in f
 of the existing engine, not beside or instead of it:
 
 1. The user describes a process in plain English.
-2. An LLM call (routed through the existing `LLMClient`, no new provider) produces a
+2. An LLM call (routed through the existing `app.llm` provider abstraction —
+   `get_llm_provider(...).complete(...)`, Phase 2 — no new provider) produces a
    **structured intermediate representation (IR)** — not the final graph JSON directly.
 3. A deterministic Python **compiler** turns the validated IR into the exact same
    `Workflow.graph` JSON shape (`{nodes, edges}`) the Workflow Builder already reads

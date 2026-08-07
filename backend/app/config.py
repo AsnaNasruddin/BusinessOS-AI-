@@ -40,6 +40,9 @@ class Settings(BaseSettings):
     openai_api_key: str | None = None
     groq_api_key: str | None = None
 
+    # --- RAG (Section 12, rule 4 — model name lives here, not scattered) ---
+    embedding_model: str = "nomic-embed-text"
+
 
 @lru_cache
 def get_settings() -> Settings:

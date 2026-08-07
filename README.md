@@ -21,7 +21,8 @@ This repo is early — here's what actually exists today versus what's planned:
 | Auth + Orgs (Phase 1) | ✅ Built — JWT access/refresh, bcrypt, org create/list/invite/accept-invite, org-scoped membership enforcement. Frontend wired (login/register/org switcher). |
 | Tools + LLM abstraction (Phase 2) | ✅ Built — Agent CRUD (org-scoped), built-in tool registry, unified LLM provider interface (Ollama + Anthropic/OpenAI/Groq over plain HTTPS). Verified with a real completion through Ollama (`llama3.1:8b`, running locally via `brew services`). Frontend Agents page wired to the real API. |
 | Knowledge Base / RAG (Phase 3) | ✅ Built — KB + document CRUD, real ingestion pipeline (chunk → embed via Ollama `nomic-embed-text` → store in Chroma), retrieval endpoint. Seeded with all 11 real `seed-data/knowledge-base/` docs across 3 KBs; verified with a live semantic query returning correct, relevant chunks. Frontend KB page wired to the real API (read path only — upload UI still a placeholder). Only plain-text formats (.md/.txt/.html) are parsed so far, not PDF/DOCX. |
-| Workflow engine, Approvals, Memory (Phases 4–6) | ⏳ Not started |
+| Workflow engine v0 (Phase 4) | ✅ Built — Workflow/Run/Step models, a graph validator (`app/workflows/graph.py`) enforcing v0's linear-chain constraint (no condition/approval/parallel/merge yet — those need Phase 5), a real execution engine dispatching trigger/agent/tool/end nodes, Celery-backed async runs. `search_kb` tool nodes run the real Phase 3 RAG pipeline; other tools are honest stubs (no email/CRM/HTTP integrations exist yet). Verified via the real API → Celery → worker path, not just direct calls. |
+| Approvals, Memory (Phases 5–6) | ⏳ Not started |
 | Natural Language Workflow Generator (Phase 7) | 📝 Spec'd, not built — see [`docs/`](docs/) |
 
 The frontend is real, runnable code — it's just not wired to anything yet. Every
@@ -124,7 +125,7 @@ addendum's own Rule 13/14 additions for the standing convention.
 1. ✅ Auth + Orgs
 2. ✅ Tools + LLM abstraction
 3. ✅ Knowledge Base (RAG)
-4. Workflow engine v0 (linear execution)
+4. ✅ Workflow engine v0 (linear execution)
 5. Branches + approvals
 6. Memory + observability
 7. **Natural Language Workflow Generator** *(new — see docs/)*

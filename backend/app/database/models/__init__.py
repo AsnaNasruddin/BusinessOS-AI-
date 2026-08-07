@@ -7,6 +7,7 @@ from app.database.models.base import Base
 from app.database.models.kb import KbDocument, KnowledgeBase
 from app.database.models.org import Membership, Organization
 from app.database.models.user import User
+from app.database.models.workflow import Workflow, WorkflowRun, WorkflowStep
 
 __all__ = [
     "Base",
@@ -16,4 +17,7 @@ __all__ = [
     "Agent",
     "KnowledgeBase",
     "KbDocument",
+    "Workflow",
+    "WorkflowRun",
+    "WorkflowStep",
 ]

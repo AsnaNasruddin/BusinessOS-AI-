@@ -1,11 +1,38 @@
 import { useQuery } from '@tanstack/react-query'
-import { mockFetch } from '@/lib/mock-fetch'
-import { workflows } from '@/lib/seed-data'
+import { api } from '@/lib/api'
+import { formatRelativeTime } from '@/lib/format'
+import type { Workflow, WorkflowTriggerType } from '@/types'
 
-// TODO(learning): swap for `api.get('/workflows')` once Module 4 (Workflow Builder) has a backend.
+interface WorkflowRaw {
+  id: string
+  org_id: string
+  name: string
+  description: string
+  trigger_type: WorkflowTriggerType
+  is_active: boolean
+  version: number
+  updated_at: string
+}
+
+function toWorkflow(raw: WorkflowRaw): Workflow {
+  return {
+    id: raw.id,
+    orgId: raw.org_id,
+    name: raw.name,
+    description: raw.description,
+    triggerType: raw.trigger_type,
+    isActive: raw.is_active,
+    version: raw.version,
+    updatedAtLabel: formatRelativeTime(raw.updated_at),
+  }
+}
+
 export function useWorkflows() {
   return useQuery({
     queryKey: ['workflows'],
-    queryFn: () => mockFetch(workflows),
+    queryFn: async () => {
+      const { data } = await api.get<WorkflowRaw[]>('/workflows')
+      return data.map(toWorkflow)
+    },
   })
 }

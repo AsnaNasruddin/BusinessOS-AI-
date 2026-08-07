@@ -11,7 +11,6 @@ all of the demo data in it.
 """
 
 import asyncio
-import sys
 from pathlib import Path
 
 from sqlalchemy import select
@@ -22,7 +21,9 @@ from app.database.session import async_session_maker
 from app.rag.ingest import ingest_document
 from app.schemas.agent import AgentCreate
 from app.schemas.kb import KnowledgeBaseCreate
-from app.services import agent_service, auth_service, kb_service, org_service
+from app.schemas.workflow import WorkflowCreate
+from app.services import agent_service, auth_service, kb_service, org_service, workflow_service
+from app.workflows.executor import execute_workflow
 
 SEED_DATA_DIR = Path(__file__).parent.parent / "seed-data"
 
@@ -211,11 +212,98 @@ async def create_demo_knowledge_bases(org_id) -> None:
                 print(f"    ingested {md_file.name} -> {chunk_count} chunks")
 
 
+DEMO_WORKFLOW_NAME = "Weekly Report Digest"
+
+
 async def create_demo_workflows(org_id) -> None:
-    """Phase 4-5 (Workflow engine + approvals). Creates the six workflows
-    from frontend/src/lib/seed-data.ts, including the Customer Support
-    Triage graph used throughout the design docs."""
-    print("TODO(phase 4-5): create demo workflows")
+    """Phase 4 (Workflow engine v0). Creates one real, linear workflow —
+    trigger -> agent -> tool -> end — and runs it once so there's real
+    WorkflowRun/WorkflowStep data to look at.
+
+    The richer branching example already sketched in
+    frontend/src/lib/seed-data.ts (Customer Support Triage — condition node,
+    approval node, parallel send+log) isn't seeded here: v0 only executes
+    linear chains (app/workflows/graph.py rejects condition/approval/
+    parallel/merge nodes until Phase 5 exists). Seeding that graph now would
+    create a workflow nobody can actually run yet."""
+    async with async_session_maker() as db:
+        existing = await workflow_service.list_workflows(db, org_id=org_id)
+        if any(w.name == DEMO_WORKFLOW_NAME for w in existing):
+            print(f"  workflow '{DEMO_WORKFLOW_NAME}' already exists, skipping")
+            return
+
+        agents = await agent_service.list_agents(db, org_id=org_id)
+        triage_agent = next((a for a in agents if a.name == "Triage Classifier"), None)
+        if triage_agent is None:
+            print("  Triage Classifier agent not found — run create_demo_agents() first")
+            return
+
+        graph = {
+            "nodes": [
+                {
+                    "id": "t",
+                    "type": "trigger",
+                    "position": {"x": 0, "y": 0},
+                    "data": {"label": "Weekly Kickoff", "sub": "trigger · manual"},
+                },
+                {
+                    "id": "a",
+                    "type": "agent",
+                    "position": {"x": 220, "y": 0},
+                    "data": {
+                        "label": "Triage Classifier",
+                        "sub": "agent",
+                        "agentId": str(triage_agent.id),
+                    },
+                },
+                {
+                    "id": "k",
+                    "type": "tool",
+                    "position": {"x": 440, "y": 0},
+                    "data": {"label": "log_activity", "sub": "tool", "toolName": "log_activity"},
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "position": {"x": 660, "y": 0},
+                    "data": {"label": "Done", "sub": "end"},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "t", "target": "a"},
+                {"id": "e2", "source": "a", "target": "k"},
+                {"id": "e3", "source": "k", "target": "e"},
+            ],
+        }
+
+        workflow = await workflow_service.create_workflow(
+            db,
+            org_id=org_id,
+            data=WorkflowCreate(
+                name=DEMO_WORKFLOW_NAME,
+                description="A real, linear v0 demo — summarizes the week and logs it.",
+                trigger_type="schedule",
+                graph=graph,
+            ),
+        )
+        await db.commit()
+        print(f"  created workflow '{DEMO_WORKFLOW_NAME}'")
+
+        run = await workflow_service.create_run(
+            db, workflow=workflow, trigger_payload={"period": "this week"}
+        )
+        await db.commit()
+        print(f"  triggered run {run.id}")
+
+        try:
+            await execute_workflow(run.id, db, get_settings())
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 - report and move on, don't abort the whole seed
+            print(f"  FAILED to execute demo run: {exc}")
+            return
+
+        await db.refresh(run)
+        print(f"  run finished — status={run.status!r}, total_tokens={run.total_tokens}")
 
 
 async def main() -> None:
@@ -228,11 +316,8 @@ async def main() -> None:
     await create_demo_knowledge_bases(org_id)
     print("Workflows:")
     await create_demo_workflows(org_id)
-    print("Done (see TODOs above for what's not implemented yet).")
+    print("Done.")
 
 
 if __name__ == "__main__":
-    if not (Path(__file__).parent.parent / "backend" / "app").exists():
-        print("Run this from the repo root.", file=sys.stderr)
-        sys.exit(1)
     asyncio.run(main())

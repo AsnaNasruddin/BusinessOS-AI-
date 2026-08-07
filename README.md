@@ -19,7 +19,8 @@ This repo is early — here's what actually exists today versus what's planned:
 | Frontend data | ⚠️ Seeded/placeholder — every screen reads from `frontend/src/lib/seed-data.ts`, not a live API |
 | Backend skeleton (Phase 0) | ✅ Built (`backend/`) — FastAPI hello-world, async SQLAlchemy + Alembic wired, Celery worker skeleton, Docker Compose, CI. No business logic yet — that's Phase 1+. |
 | Auth + Orgs (Phase 1) | ✅ Built — JWT access/refresh, bcrypt, org create/list/invite/accept-invite, org-scoped membership enforcement. Frontend wired (login/register/org switcher). |
-| Agents, KB, Workflow engine, Approvals, Memory (Phases 2–6) | ⏳ Not started |
+| Tools + LLM abstraction (Phase 2) | ✅ Built — Agent CRUD (org-scoped), built-in tool registry, unified LLM provider interface (Ollama + Anthropic/OpenAI/Groq over plain HTTPS). Verified with a real completion through Ollama (`llama3.1:8b`, running locally via `brew services`). Frontend Agents page wired to the real API. |
+| KB, Workflow engine, Approvals, Memory (Phases 3–6) | ⏳ Not started |
 | Natural Language Workflow Generator (Phase 7) | 📝 Spec'd, not built — see [`docs/`](docs/) |
 
 The frontend is real, runnable code — it's just not wired to anything yet. Every
@@ -120,7 +121,7 @@ addendum's own Rule 13/14 additions for the standing convention.
 
 0. ✅ Skeleton — repo layout, Docker Compose, CI
 1. ✅ Auth + Orgs
-2. Tools + LLM abstraction
+2. ✅ Tools + LLM abstraction
 3. Knowledge Base (RAG)
 4. Workflow engine v0 (linear execution)
 5. Branches + approvals

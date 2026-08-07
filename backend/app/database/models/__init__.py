@@ -2,6 +2,7 @@
 # user.py, org.py (Phase 1); agent.py, kb.py, workflow.py, tool.py, memory.py,
 # log.py (Phase 2+). Alembic's autogenerate reads Base.metadata, so a model
 # that isn't imported here is invisible to migrations.
+from app.database.models.agent import Agent
 from app.database.models.base import Base
 from app.database.models.org import Membership, Organization
 from app.database.models.user import User
@@ -11,4 +12,5 @@ __all__ = [
     "User",
     "Organization",
     "Membership",
+    "Agent",
 ]

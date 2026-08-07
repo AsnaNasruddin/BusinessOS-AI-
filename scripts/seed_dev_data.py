@@ -18,7 +18,8 @@ from sqlalchemy import select
 
 from app.database.models import User
 from app.database.session import async_session_maker
-from app.services import auth_service, org_service
+from app.schemas.agent import AgentCreate
+from app.services import agent_service, auth_service, org_service
 
 SEED_DATA_DIR = Path(__file__).parent.parent / "seed-data"
 
@@ -26,6 +27,64 @@ DEMO_EMAIL = "demo@businessos.ai"
 DEMO_PASSWORD = "Demo1234!"
 DEMO_FULL_NAME = "Jordan Avery"
 DEMO_ORG_NAME = "Acme Robotics"
+
+# Mirrors frontend/src/lib/seed-data.ts's `agents` array exactly.
+DEMO_AGENTS = [
+    {
+        "name": "Triage Classifier",
+        "description": "Classifies incoming support email.",
+        "system_prompt": (
+            "Classify the incoming email into billing_refund, technical_issue, or "
+            "general_inquiry. Decide if knowledge-base lookup is needed. Return JSON: "
+            "{category, urgency, needs_kb}."
+        ),
+        "model_provider": "ollama",
+        "model_name": "llama3.1:8b",
+        "temperature": 0.2,
+        "allowed_tools": [],
+        "memory_scope": "none",
+    },
+    {
+        "name": "Draft Reply Writer",
+        "description": "Writes the customer-facing reply.",
+        "system_prompt": (
+            "You are a support specialist for Acme Robotics. Use retrieved knowledge-base "
+            "context, if any, to write a warm, precise reply. Never promise refunds outside "
+            "policy. Return JSON: {subject, body, confidence}."
+        ),
+        "model_provider": "ollama",
+        "model_name": "llama3.1:8b",
+        "temperature": 0.4,
+        "allowed_tools": ["search_kb", "send_email"],
+        "memory_scope": "session",
+    },
+    {
+        "name": "Memory Extractor",
+        "description": "Extracts durable facts after each agent turn.",
+        "system_prompt": (
+            "After each agent turn, decide if anything durable happened worth remembering "
+            "about this customer or deal. Return JSON: {should_remember, fact, importance}."
+        ),
+        "model_provider": "ollama",
+        "model_name": "qwen2.5:7b",
+        "temperature": 0.1,
+        "allowed_tools": [],
+        "memory_scope": "persistent",
+    },
+    {
+        "name": "Lead Enrichment Agent",
+        "description": "Enriches inbound leads with firmographic data.",
+        "system_prompt": (
+            "Given a new lead company domain, research and summarize firmographic details "
+            "relevant to sales qualification. Return JSON: {company_size, industry, fit_score}."
+        ),
+        "model_provider": "anthropic",
+        "model_name": "claude-haiku",
+        "temperature": 0.3,
+        "allowed_tools": ["http_request"],
+        "memory_scope": "none",
+    },
+]
 
 
 async def create_demo_org_and_user():
@@ -58,7 +117,16 @@ async def create_demo_org_and_user():
 async def create_demo_agents(org_id) -> None:
     """Phase 2 (Tools + LLM abstraction). Creates the four agents already
     described in frontend/src/lib/seed-data.ts."""
-    print("TODO(phase 2): create demo agents")
+    async with async_session_maker() as db:
+        existing_names = {a.name for a in await agent_service.list_agents(db, org_id=org_id)}
+        created = 0
+        for spec in DEMO_AGENTS:
+            if spec["name"] in existing_names:
+                continue
+            await agent_service.create_agent(db, org_id=org_id, data=AgentCreate(**spec))
+            created += 1
+        await db.commit()
+        print(f"  created {created} agent(s), {len(DEMO_AGENTS) - created} already existed")
 
 
 async def create_demo_knowledge_bases(org_id) -> None:

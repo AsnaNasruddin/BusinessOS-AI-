@@ -136,6 +136,13 @@ async def _drive(
     db: AsyncSession,
     settings: Settings,
 ) -> None:
+    # Reserved context keys (alongside "trigger") — run-scoped identifiers
+    # a node handler might need but that aren't any node's output. Phase 6's
+    # memory tool nodes are the first to need these (AgentMemory rows are
+    # org-scoped and traced back to the run that wrote them).
+    context["_org_id"] = str(run.org_id)
+    context["_run_id"] = str(run.id)
+
     outgoing: dict[str, list[GraphEdge]] = defaultdict(list)
     incoming: dict[str, list[GraphEdge]] = defaultdict(list)
     for edge in graph.edges:

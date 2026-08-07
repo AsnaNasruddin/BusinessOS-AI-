@@ -2,12 +2,9 @@ import uuid
 from unittest.mock import patch
 
 import pytest
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
-from app.config import get_settings
 from app.llm.base import LLMResponse
 from app.llm.ollama_provider import OllamaProvider
-from app.workflows.executor import execute_workflow, resume_workflow
 
 
 async def _register_with_org(client, email, full_name):
@@ -36,38 +33,6 @@ def _edge(id_, source, target, source_handle=None):
     if source_handle is not None:
         edge["source_handle"] = source_handle
     return edge
-
-
-@pytest.fixture
-def run_pending_workflow(db_engine):
-    """Executes a queued run against the test's own in-memory DB — standing
-    in for what the Celery worker does in production. Calling execute_workflow()
-    directly (rather than routing through Celery's eager mode) sidesteps
-    asyncio.run() being invoked from inside pytest-asyncio's already-running
-    event loop, which would otherwise raise."""
-    session_maker = async_sessionmaker(db_engine, expire_on_commit=False)
-
-    async def _run(run_id: uuid.UUID) -> None:
-        async with session_maker() as db:
-            await execute_workflow(run_id, db, get_settings())
-            await db.commit()
-
-    return _run
-
-
-@pytest.fixture
-def run_pending_resume(db_engine):
-    """Same idea as run_pending_workflow, but for resuming a paused run —
-    standing in for what resume_workflow_task does once Celery picks up the
-    approval decision."""
-    session_maker = async_sessionmaker(db_engine, expire_on_commit=False)
-
-    async def _resume(run_id: uuid.UUID, node_id: str) -> None:
-        async with session_maker() as db:
-            await resume_workflow(run_id, node_id, db, get_settings())
-            await db.commit()
-
-    return _resume
 
 
 @pytest.fixture(autouse=True)

@@ -7,6 +7,7 @@ one changes which node runs next rather than just what one node returns."""
 from dataclasses import dataclass
 from typing import Any
 
+from app.workflows.context_path import resolve_path
 from app.workflows.graph import GraphNode
 from app.workflows.nodes.base import WorkflowExecutionError
 
@@ -25,7 +26,7 @@ def evaluate(node: GraphNode, context: dict) -> ConditionResult:
             f"Condition node {node.id!r} is missing a 'field' to evaluate."
         )
 
-    value = _resolve_path(context, field)
+    value = resolve_path(context, field)
     operator = node.data.get("operator", "truthy")
     target = node.data.get("value")
 
@@ -41,16 +42,6 @@ def evaluate(node: GraphNode, context: dict) -> ConditionResult:
         )
 
     return ConditionResult(handle="yes" if matched else "no", field=field, value=value)
-
-
-def _resolve_path(context: dict, path: str) -> Any:
-    current: Any = context
-    for part in path.split("."):
-        if isinstance(current, dict) and part in current:
-            current = current[part]
-        else:
-            return None
-    return current
 
 
 def _compare(value: Any, target: Any, operator: str) -> bool:

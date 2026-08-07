@@ -36,6 +36,20 @@ BUILTIN_TOOLS: list[ToolOut] = [
         description="Generic outbound HTTP call.",
         category="data",
     ),
+    ToolOut(
+        id="remember_fact",
+        name="remember_fact",
+        display_name="remember_fact",
+        description="Writes a durable fact about a subject, readable by later, separate runs.",
+        category="memory",
+    ),
+    ToolOut(
+        id="recall_memories",
+        name="recall_memories",
+        display_name="recall_memories",
+        description="Looks up facts previously remembered about a subject.",
+        category="memory",
+    ),
 ]
 
 TOOL_NAMES = {tool.name for tool in BUILTIN_TOOLS}

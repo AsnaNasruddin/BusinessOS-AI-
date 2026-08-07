@@ -101,6 +101,22 @@ async def list_runs(
     return list(result.scalars().all())
 
 
+async def list_runs_for_org(
+    db: AsyncSession, *, org_id: uuid.UUID, limit: int = 50
+) -> list[RunWithWorkflowName]:
+    """Every run across every workflow, newest first — what the Runs page
+    needs to let a user browse real runs instead of pointing at a single
+    hardcoded id (the known gap flagged since Phase 4)."""
+    result = await db.execute(
+        select(WorkflowRun, Workflow.name)
+        .join(Workflow, Workflow.id == WorkflowRun.workflow_id)
+        .where(WorkflowRun.org_id == org_id)
+        .order_by(WorkflowRun.started_at.desc())
+        .limit(limit)
+    )
+    return [RunWithWorkflowName(run=run, workflow_name=name) for run, name in result.all()]
+
+
 async def list_run_steps(db: AsyncSession, *, run_id: uuid.UUID) -> list[WorkflowStep]:
     result = await db.execute(
         select(WorkflowStep).where(WorkflowStep.run_id == run_id).order_by(WorkflowStep.created_at)

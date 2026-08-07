@@ -489,6 +489,145 @@ async def create_demo_branching_workflow(org_id) -> None:
         print(f"  run finished — status={run.status!r}, total_tokens={run.total_tokens}")
 
 
+DEMO_MEMORY_WORKFLOW_NAME = "Customer History Assistant"
+
+
+async def create_demo_memory_workflow(org_id) -> None:
+    """Phase 6 (Memory). trigger -> recall_memories -> agent -> remember_fact
+    -> end. Runs it twice for the *same* customer with two different
+    messages — since each execute_workflow() call starts from a totally
+    fresh in-memory `context` dict, the only way run 2's recall_memories
+    step can see run 1's message is through the real AgentMemory table.
+    That's the actual thing Phase 6 adds that Phases 4/5 couldn't do."""
+    async with async_session_maker() as db:
+        existing = await workflow_service.list_workflows(db, org_id=org_id)
+        if any(w.name == DEMO_MEMORY_WORKFLOW_NAME for w in existing):
+            print(f"  workflow '{DEMO_MEMORY_WORKFLOW_NAME}' already exists, skipping")
+            return
+
+        agents = await agent_service.list_agents(db, org_id=org_id)
+        triage_agent = next((a for a in agents if a.name == "Triage Classifier"), None)
+        if triage_agent is None:
+            print("  Triage Classifier agent not found — run create_demo_agents() first")
+            return
+
+        graph = {
+            "nodes": [
+                {
+                    "id": "t",
+                    "type": "trigger",
+                    "position": {"x": 0, "y": 0},
+                    "data": {"label": "Customer Message", "sub": "trigger · manual"},
+                },
+                {
+                    "id": "k_recall",
+                    "type": "tool",
+                    "position": {"x": 220, "y": 0},
+                    "data": {
+                        "label": "recall_memories",
+                        "sub": "tool · memory",
+                        "toolName": "recall_memories",
+                        "subjectField": "trigger.customer",
+                    },
+                },
+                {
+                    "id": "a",
+                    "type": "agent",
+                    "position": {"x": 440, "y": 0},
+                    "data": {
+                        "label": "Triage Classifier",
+                        "sub": "agent",
+                        "agentId": str(triage_agent.id),
+                    },
+                },
+                {
+                    "id": "k_remember",
+                    "type": "tool",
+                    "position": {"x": 660, "y": 0},
+                    "data": {
+                        "label": "remember_fact",
+                        "sub": "tool · memory",
+                        "toolName": "remember_fact",
+                        "subjectField": "trigger.customer",
+                        "factField": "trigger.message",
+                    },
+                },
+                {
+                    "id": "e",
+                    "type": "end",
+                    "position": {"x": 880, "y": 0},
+                    "data": {"label": "Done", "sub": "end"},
+                },
+            ],
+            "edges": [
+                {"id": "e1", "source": "t", "target": "k_recall"},
+                {"id": "e2", "source": "k_recall", "target": "a"},
+                {"id": "e3", "source": "a", "target": "k_remember"},
+                {"id": "e4", "source": "k_remember", "target": "e"},
+            ],
+        }
+
+        workflow = await workflow_service.create_workflow(
+            db,
+            org_id=org_id,
+            data=WorkflowCreate(
+                name=DEMO_MEMORY_WORKFLOW_NAME,
+                description=(
+                    "Recalls what's known about a customer, then remembers this message for "
+                    "next time."
+                ),
+                trigger_type="manual",
+                graph=graph,
+            ),
+        )
+        await db.commit()
+        print(f"  created workflow '{DEMO_MEMORY_WORKFLOW_NAME}'")
+
+        run1 = await workflow_service.create_run(
+            db,
+            workflow=workflow,
+            trigger_payload={
+                "customer": "Riley Nakamura",
+                "message": "Asked whether the Delta-9 model is back in stock.",
+            },
+        )
+        await db.commit()
+        try:
+            await execute_workflow(run1.id, db, get_settings())
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001 - report and move on, don't abort the whole seed
+            print(f"  FAILED to execute demo run 1: {exc}")
+            return
+        await db.refresh(run1)
+        print(f"  run 1 finished — status={run1.status!r} (nothing to recall yet, first contact)")
+
+        run2 = await workflow_service.create_run(
+            db,
+            workflow=workflow,
+            trigger_payload={
+                "customer": "Riley Nakamura",
+                "message": "Following up — still interested, when will it ship?",
+            },
+        )
+        await db.commit()
+        try:
+            await execute_workflow(run2.id, db, get_settings())
+            await db.commit()
+        except Exception as exc:  # noqa: BLE001
+            print(f"  FAILED to execute demo run 2: {exc}")
+            return
+        await db.refresh(run2)
+
+        steps = await workflow_service.list_run_steps(db, run_id=run2.id)
+        recall_step = next((s for s in steps if s.node_id == "k_recall"), None)
+        recalled = recall_step.payload if recall_step and recall_step.payload else []
+        print(
+            f"  run 2 finished — status={run2.status!r}, recalled {len(recalled)} earlier fact(s):"
+        )
+        for fact in recalled:
+            print(f"    - {fact['fact']!r} (from run 1)")
+
+
 async def main() -> None:
     print("Seeding BusinessOS AI dev data...")
     print("Org + user:")
@@ -500,6 +639,7 @@ async def main() -> None:
     print("Workflows:")
     await create_demo_workflows(org_id)
     await create_demo_branching_workflow(org_id)
+    await create_demo_memory_workflow(org_id)
     print("Done.")
 
 

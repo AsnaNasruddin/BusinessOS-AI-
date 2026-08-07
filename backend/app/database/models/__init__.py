@@ -6,6 +6,7 @@ from app.database.models.agent import Agent
 from app.database.models.approval import Approval
 from app.database.models.base import Base
 from app.database.models.kb import KbDocument, KnowledgeBase
+from app.database.models.memory import AgentMemory
 from app.database.models.org import Membership, Organization
 from app.database.models.user import User
 from app.database.models.workflow import Workflow, WorkflowRun, WorkflowStep
@@ -22,4 +23,5 @@ __all__ = [
     "WorkflowRun",
     "WorkflowStep",
     "Approval",
+    "AgentMemory",
 ]

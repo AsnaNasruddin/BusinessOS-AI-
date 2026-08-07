@@ -1,11 +1,15 @@
+import uuid
+
 import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import StaticPool
 
+from app.config import get_settings
 from app.database.models import Base
 from app.database.session import get_db
 from app.main import app
+from app.workflows.executor import execute_workflow, resume_workflow
 
 
 @pytest.fixture
@@ -45,3 +49,36 @@ async def client(db_engine):
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def run_pending_workflow(db_engine):
+    """Executes a queued run against the test's own in-memory DB — standing
+    in for what the Celery worker does in production. Calling execute_workflow()
+    directly (rather than routing through Celery's eager mode) sidesteps
+    asyncio.run() being invoked from inside pytest-asyncio's already-running
+    event loop, which would otherwise raise. Shared across test files (Phase
+    4's workflow tests, Phase 5's approval tests, Phase 6's memory tests)."""
+    session_maker = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def _run(run_id: uuid.UUID) -> None:
+        async with session_maker() as db:
+            await execute_workflow(run_id, db, get_settings())
+            await db.commit()
+
+    return _run
+
+
+@pytest.fixture
+def run_pending_resume(db_engine):
+    """Same idea as run_pending_workflow, but for resuming a paused run —
+    standing in for what resume_workflow_task does once Celery picks up the
+    approval decision."""
+    session_maker = async_sessionmaker(db_engine, expire_on_commit=False)
+
+    async def _resume(run_id: uuid.UUID, node_id: str) -> None:
+        async with session_maker() as db:
+            await resume_workflow(run_id, node_id, db, get_settings())
+            await db.commit()
+
+    return _resume

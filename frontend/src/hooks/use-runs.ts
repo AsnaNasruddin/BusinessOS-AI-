@@ -59,6 +59,16 @@ function toStep(raw: WorkflowStepRaw): WorkflowStep {
   }
 }
 
+export function useRuns() {
+  return useQuery({
+    queryKey: ['runs'],
+    queryFn: async () => {
+      const { data } = await api.get<RunRaw[]>('/runs')
+      return data.map(toRun)
+    },
+  })
+}
+
 export function useRun(runId: string) {
   return useQuery({
     queryKey: ['runs', runId],

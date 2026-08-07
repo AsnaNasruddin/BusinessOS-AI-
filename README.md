@@ -18,7 +18,8 @@ This repo is early — here's what actually exists today versus what's planned:
 | Frontend shell, design system, routing | ✅ Built (`frontend/`) — Dashboard, Workflow Builder, Agents, Knowledge Base, Runs, Approvals, Login |
 | Frontend data | ⚠️ Seeded/placeholder — every screen reads from `frontend/src/lib/seed-data.ts`, not a live API |
 | Backend skeleton (Phase 0) | ✅ Built (`backend/`) — FastAPI hello-world, async SQLAlchemy + Alembic wired, Celery worker skeleton, Docker Compose, CI. No business logic yet — that's Phase 1+. |
-| Auth, Agents, KB, Workflow engine, Approvals, Memory (Phases 1–6) | ⏳ Not started |
+| Auth + Orgs (Phase 1) | ✅ Built — JWT access/refresh, bcrypt, org create/list/invite/accept-invite, org-scoped membership enforcement. Frontend wired (login/register/org switcher). |
+| Agents, KB, Workflow engine, Approvals, Memory (Phases 2–6) | ⏳ Not started |
 | Natural Language Workflow Generator (Phase 7) | 📝 Spec'd, not built — see [`docs/`](docs/) |
 
 The frontend is real, runnable code — it's just not wired to anything yet. Every
@@ -118,7 +119,7 @@ addendum's own Rule 13/14 additions for the standing convention.
 ## Development phases
 
 0. ✅ Skeleton — repo layout, Docker Compose, CI
-1. Auth + Orgs
+1. ✅ Auth + Orgs
 2. Tools + LLM abstraction
 3. Knowledge Base (RAG)
 4. Workflow engine v0 (linear execution)

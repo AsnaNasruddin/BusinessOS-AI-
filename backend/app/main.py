@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import auth, orgs
 from app.config import get_settings
 
 settings = get_settings()
@@ -31,8 +32,10 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Phase 1+ mounts routers here as they're built:
-#   from app.api.v1 import auth, orgs, agents, kb, tools
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(orgs.router, prefix="/api/v1/orgs", tags=["orgs"])
+
+# Phase 2+ mounts routers here as they're built:
+#   from app.api.v1 import agents, kb, tools
 #   from app.api.v1 import workflows, runs, approvals, dashboard, analytics
-#   app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
 #   ...

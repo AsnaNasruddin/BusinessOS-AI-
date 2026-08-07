@@ -46,6 +46,15 @@ export interface User {
   fullName: string
 }
 
+/** One row of `GET /auth/me`'s memberships array — which orgs this user
+ * belongs to and their role in each, used to drive the org switcher. */
+export interface Membership {
+  orgId: string
+  orgName: string
+  orgSlug: string
+  role: MembershipRole
+}
+
 export interface Agent {
   id: string
   orgId: string

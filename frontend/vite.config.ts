@@ -14,5 +14,14 @@ export default defineConfig({
   },
   server: {
     port: 5173,
+    // Tunneled QA access (ngrok/cloudflared) arrives with a random, unknown
+    // Host header — Vite's DNS-rebinding guard blocks that by default.
+    allowedHosts: true,
+    proxy: {
+      '/api/v1': {
+        target: process.env.VITE_PROXY_TARGET ?? 'http://localhost:8000',
+        changeOrigin: true,
+      },
+    },
   },
 })

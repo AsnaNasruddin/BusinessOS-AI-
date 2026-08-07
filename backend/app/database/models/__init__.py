@@ -1,6 +1,14 @@
-# Model modules register themselves here as phases add them (Section 6):
-# user.py, org.py, agent.py, kb.py, workflow.py, tool.py, memory.py, log.py.
-# Empty in Phase 0 — Auth + Orgs (Phase 1) adds the first models.
+# Every model module registers on Base here as phases add it (Section 6):
+# user.py, org.py (Phase 1); agent.py, kb.py, workflow.py, tool.py, memory.py,
+# log.py (Phase 2+). Alembic's autogenerate reads Base.metadata, so a model
+# that isn't imported here is invisible to migrations.
 from app.database.models.base import Base
+from app.database.models.org import Membership, Organization
+from app.database.models.user import User
 
-__all__ = ["Base"]
+__all__ = [
+    "Base",
+    "User",
+    "Organization",
+    "Membership",
+]

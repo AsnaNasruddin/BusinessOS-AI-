@@ -15,6 +15,7 @@ from pathlib import Path
 
 from sqlalchemy import select
 
+import app as app_package
 from app.config import get_settings
 from app.database.models import Approval, User
 from app.database.session import async_session_maker
@@ -28,11 +29,20 @@ from app.services import (
     auth_service,
     kb_service,
     org_service,
+    workflow_generation_service,
     workflow_service,
 )
+from app.workflow_generation.planner import PLANNER_AGENT_NAME
 from app.workflows.executor import execute_workflow, resume_workflow
 
 SEED_DATA_DIR = Path(__file__).parent.parent / "seed-data"
+# Resolved from the `app` package's own __file__ rather than a path relative
+# to this script — robust to this script running inside the backend
+# container (where backend/ is mounted AT /app, so "app/agents/..." from
+# the repo root would be wrong) or natively from the repo root.
+PLANNER_PROMPT_PATH = (
+    Path(app_package.__file__).parent / "agents" / "prompts" / "workflow_planner.md"
+)
 
 DEMO_EMAIL = "demo@businessos.ai"
 DEMO_PASSWORD = "Demo1234!"
@@ -145,6 +155,35 @@ async def create_demo_agents(org_id) -> None:
             created += 1
         await db.commit()
         print(f"  created {created} agent(s), {len(DEMO_AGENTS) - created} already existed")
+
+
+async def create_planner_agent(org_id) -> None:
+    """Phase 7 (Natural Language Workflow Generator). Seeds the Workflow
+    Planner as an ordinary Agent row (§16.6) — its system prompt is long
+    enough to live in its own file (app/agents/prompts/workflow_planner.md)
+    rather than inline like DEMO_AGENTS above."""
+    async with async_session_maker() as db:
+        existing_names = {a.name for a in await agent_service.list_agents(db, org_id=org_id)}
+        if PLANNER_AGENT_NAME in existing_names:
+            print(f"  agent '{PLANNER_AGENT_NAME}' already exists, reusing")
+            return
+
+        await agent_service.create_agent(
+            db,
+            org_id=org_id,
+            data=AgentCreate(
+                name=PLANNER_AGENT_NAME,
+                description="Turns a plain-English request into a workflow plan.",
+                system_prompt=PLANNER_PROMPT_PATH.read_text(),
+                model_provider="ollama",
+                model_name="llama3.1:8b",
+                temperature=0.2,
+                allowed_tools=["list_agents", "list_tools", "list_knowledge_bases"],
+                memory_scope="none",
+            ),
+        )
+        await db.commit()
+        print(f"  created agent '{PLANNER_AGENT_NAME}'")
 
 
 async def create_demo_knowledge_bases(org_id) -> None:
@@ -628,18 +667,98 @@ async def create_demo_memory_workflow(org_id) -> None:
             print(f"    - {fact['fact']!r} (from run 1)")
 
 
+DEMO_GENERATED_WORKFLOW_TEXT = (
+    "When a customer emails a refund request, classify it with the Triage Classifier, and if "
+    "the refund is over $500 get a manager's approval before logging it. Otherwise just log it."
+)
+DEMO_GENERATED_WORKFLOW_NAME_PREFIX = DEMO_GENERATED_WORKFLOW_TEXT[:97] + "..."
+
+
+async def create_demo_generated_workflow(org_id) -> None:
+    """Phase 7 (Natural Language Workflow Generator). Runs the real
+    generation pipeline end to end — planner (real tool-calling loop, real
+    Ollama) -> compiler -> validator -> a real, saved (inactive) Workflow
+    row with source="generated" — the same path POST /workflows/generate
+    + .../compile drive from the UI. Auto-answers any clarifying questions
+    with a generic reply so this can run unattended; a human using the
+    real UI would answer for real."""
+    async with async_session_maker() as db:
+        existing = await workflow_service.list_workflows(db, org_id=org_id)
+        if any(w.name.startswith(DEMO_GENERATED_WORKFLOW_NAME_PREFIX[:40]) for w in existing):
+            print("  a demo generated workflow already exists, skipping")
+            return
+
+        request = await workflow_generation_service.create_request(
+            db,
+            org_id=org_id,
+            user_id=(await _demo_user_id(db)),
+            description=DEMO_GENERATED_WORKFLOW_TEXT,
+        )
+        await db.commit()
+        print(f"  created generation request {request.id}")
+
+        settings = get_settings()
+        for round_num in range(1, 4):
+            await workflow_generation_service.run_generation_round(
+                db, request=request, settings=settings
+            )
+            await db.commit()
+            await db.refresh(request)
+            print(f"  round {round_num}: status={request.status!r}")
+
+            if request.status == "awaiting_answers":
+                unanswered = request.clarifying_questions[len(request.answers or []) :]
+                for question in unanswered:
+                    print(f"    Q: {question}")
+                    await workflow_generation_service.submit_answer(
+                        db, request=request, answer="Use your best judgement."
+                    )
+                    await db.commit()
+                print("    A: Use your best judgement. (auto-answered for the demo seed)")
+                continue
+
+            break
+
+        if request.status != "ready":
+            print(
+                f"  FAILED to reach a ready plan: status={request.status!r}, error={request.error}"
+            )
+            return
+
+        try:
+            workflow = await workflow_generation_service.compile_and_save(
+                db, request=request, workflow_name=DEMO_GENERATED_WORKFLOW_NAME_PREFIX
+            )
+        except Exception as exc:  # noqa: BLE001 - report and move on, don't abort the whole seed
+            print(f"  FAILED to compile: {exc}")
+            return
+        await db.commit()
+        print(
+            f"  compiled and saved workflow {workflow.id!r} "
+            f"(source={workflow.source!r}, {len(workflow.graph['nodes'])} nodes)"
+        )
+
+
+async def _demo_user_id(db):
+    result = await db.execute(select(User).where(User.email == DEMO_EMAIL))
+    return result.scalar_one().id
+
+
 async def main() -> None:
     print("Seeding BusinessOS AI dev data...")
     print("Org + user:")
     org_id = await create_demo_org_and_user()
     print("Agents:")
     await create_demo_agents(org_id)
+    await create_planner_agent(org_id)
     print("Knowledge bases:")
     await create_demo_knowledge_bases(org_id)
     print("Workflows:")
     await create_demo_workflows(org_id)
     await create_demo_branching_workflow(org_id)
     await create_demo_memory_workflow(org_id)
+    print("Natural language generation:")
+    await create_demo_generated_workflow(org_id)
     print("Done.")
 
 

@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 TriggerType = Literal["manual", "webhook", "schedule", "email"]
 RunStatus = Literal["queued", "running", "awaiting_approval", "succeeded", "failed", "cancelled"]
+WorkflowSource = Literal["manual", "generated", "hybrid"]
 
 
 class WorkflowCreate(BaseModel):
@@ -32,6 +33,8 @@ class WorkflowOut(BaseModel):
     graph: dict
     is_active: bool
     version: int
+    source: WorkflowSource
+    generation_request_id: uuid.UUID | None
     created_at: datetime
     updated_at: datetime
 

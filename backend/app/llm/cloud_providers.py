@@ -5,7 +5,29 @@ shape (plain httpx, like ollama_provider.py)."""
 
 import httpx
 
-from app.llm.base import LLMMessage, LLMProvider, LLMResponse, ProviderNotConfiguredError
+from app.llm.base import (
+    LLMMessage,
+    LLMProvider,
+    LLMResponse,
+    ProviderNotConfiguredError,
+    ToolSpec,
+)
+
+
+def _reject_unsupported_capabilities(
+    provider_name: str, response_format: dict | None, tools: list[ToolSpec] | None
+) -> None:
+    """Phase 7's structured output / tool-calling are only implemented (and
+    tested, against a real running model) for Ollama — see the note in
+    app.llm.base. Rather than silently ignore a schema or tool list a cloud
+    provider can't actually honor here, fail loudly so a caller finds out
+    at the call site, not by staring at a malformed response later."""
+    if response_format is not None or tools:
+        raise ProviderNotConfiguredError(
+            f"{provider_name} doesn't implement structured output / tool-calling in "
+            "this project yet — only Ollama does. Use an Ollama-backed agent for "
+            "features that need either."
+        )
 
 
 class AnthropicProvider(LLMProvider):
@@ -13,10 +35,17 @@ class AnthropicProvider(LLMProvider):
         self._api_key = api_key
 
     async def complete(
-        self, messages: list[LLMMessage], *, model: str, temperature: float
+        self,
+        messages: list[LLMMessage],
+        *,
+        model: str,
+        temperature: float,
+        response_format: dict | None = None,
+        tools: list[ToolSpec] | None = None,
     ) -> LLMResponse:
         if not self._api_key:
             raise ProviderNotConfiguredError("ANTHROPIC_API_KEY is not set.")
+        _reject_unsupported_capabilities("Anthropic", response_format, tools)
 
         system = "\n".join(m.content for m in messages if m.role == "system") or None
         turns = [{"role": m.role, "content": m.content} for m in messages if m.role != "system"]
@@ -52,10 +81,17 @@ class _OpenAICompatibleProvider(LLMProvider):
         self._api_key = api_key
 
     async def complete(
-        self, messages: list[LLMMessage], *, model: str, temperature: float
+        self,
+        messages: list[LLMMessage],
+        *,
+        model: str,
+        temperature: float,
+        response_format: dict | None = None,
+        tools: list[ToolSpec] | None = None,
     ) -> LLMResponse:
         if not self._api_key:
             raise ProviderNotConfiguredError(f"{self._env_key_name} is not set.")
+        _reject_unsupported_capabilities(self.__class__.__name__, response_format, tools)
 
         async with httpx.AsyncClient(timeout=60.0) as client:
             response = await client.post(

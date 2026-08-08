@@ -21,9 +21,21 @@ class RunWithWorkflowName:
     workflow_name: str
 
 
-async def create_workflow(db: AsyncSession, *, org_id: uuid.UUID, data: WorkflowCreate) -> Workflow:
+async def create_workflow(
+    db: AsyncSession,
+    *,
+    org_id: uuid.UUID,
+    data: WorkflowCreate,
+    source: str = "manual",
+    generation_request_id: uuid.UUID | None = None,
+) -> Workflow:
     validate_graph(WorkflowGraph.model_validate(data.graph))
-    workflow = Workflow(org_id=org_id, **data.model_dump())
+    workflow = Workflow(
+        org_id=org_id,
+        source=source,
+        generation_request_id=generation_request_id,
+        **data.model_dump(),
+    )
     db.add(workflow)
     await db.flush()
     return workflow
@@ -48,6 +60,11 @@ async def update_workflow(
     if "graph" in changes:
         validate_graph(WorkflowGraph.model_validate(changes["graph"]))
         workflow.version += 1
+        # A cheap, honest breadcrumb (§16.4 of the NLWG addendum): a
+        # workflow the planner generated, hand-edited here for the first
+        # time, becomes "hybrid" — not silently still "generated".
+        if workflow.source == "generated":
+            workflow.source = "hybrid"
     for field, value in changes.items():
         setattr(workflow, field, value)
     await db.flush()

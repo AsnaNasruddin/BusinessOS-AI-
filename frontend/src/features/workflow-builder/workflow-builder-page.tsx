@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import {
   Background,
   BackgroundVariant,
@@ -17,6 +18,7 @@ import { CircleNode } from '@/features/workflow-builder/nodes/circle-node'
 import { ConditionNode } from '@/features/workflow-builder/nodes/condition-node'
 import { NodePalette } from '@/features/workflow-builder/node-palette'
 import { InspectorPanel } from '@/features/workflow-builder/inspector-panel'
+import { RealWorkflowView } from '@/features/workflow-builder/real-workflow-view'
 import { initialEdges, initialNodes } from '@/features/workflow-builder/initial-graph'
 
 const nodeTypes = {
@@ -33,6 +35,19 @@ const RUN_STEPS = [
 ]
 
 export function WorkflowBuilderPage() {
+  const { id } = useParams<{ id: string }>()
+  if (id) {
+    return <RealWorkflowView workflowId={id} />
+  }
+  return <MockWorkflowBuilder />
+}
+
+/** The pre-existing "Customer Support Triage" example — a fixed visual
+ * mockup demonstrating the intended design (condition/approval/parallel
+ * nodes v0's linear-only engine couldn't run yet when this was built).
+ * Left exactly as it was; only reachable at the bare /workflows route now
+ * that /workflows/:id renders a real one instead. */
+function MockWorkflowBuilder() {
   const [nodes, , onNodesChange] = useNodesState(initialNodes)
   const [edges] = useEdgesState(initialEdges)
   const [selectedId, setSelectedId] = useState<string | null>('draft')
@@ -63,6 +78,12 @@ export function WorkflowBuilderPage() {
         </div>
         <div className="flex items-center gap-2">
           <span className="font-mono text-xs text-fg-dim">{runState}</span>
+          <Link
+            to="/workflows/generate"
+            className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-signal-solid bg-transparent px-3.5 text-[13px] font-medium text-signal-ink transition-colors hover:bg-signal-100"
+          >
+            ✨ Describe with AI
+          </Link>
           <Button>Save</Button>
           <Button variant="primary" onClick={handleRun}>
             ▸ Run

@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, HTTPException, status
 
 from app.database.models.workflow import Workflow
-from app.deps import CurrentOrg, DbSession
+from app.deps import CurrentOrg, CurrentUser, DbSession
 from app.schemas.workflow import (
     RunOut,
     RunRequest,
@@ -11,8 +11,9 @@ from app.schemas.workflow import (
     WorkflowOut,
     WorkflowUpdate,
 )
-from app.services import workflow_service
-from app.worker.tasks import execute_workflow_task
+from app.schemas.workflow_generation import GenerateEditRequest, WorkflowGenerationRequestOut
+from app.services import workflow_generation_service, workflow_service
+from app.worker.tasks import execute_workflow_task, generate_workflow_plan_task
 from app.workflows.graph import GraphValidationError
 
 router = APIRouter()
@@ -106,3 +107,24 @@ async def list_runs(workflow_id: uuid.UUID, ctx: CurrentOrg, db: DbSession) -> l
     workflow = await _get_workflow_or_404(db, ctx, workflow_id)
     runs = await workflow_service.list_runs(db, org_id=ctx.org.id, workflow_id=workflow.id)
     return [_run_out(r, workflow.name) for r in runs]
+
+
+@router.post(
+    "/{workflow_id}/edit-with-nl",
+    response_model=WorkflowGenerationRequestOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+async def edit_workflow_with_nl(
+    workflow_id: uuid.UUID,
+    body: GenerateEditRequest,
+    ctx: CurrentOrg,
+    user: CurrentUser,
+    db: DbSession,
+) -> WorkflowGenerationRequestOut:
+    workflow = await _get_workflow_or_404(db, ctx, workflow_id)
+    request = await workflow_generation_service.create_edit_request(
+        db, org_id=ctx.org.id, user_id=user.id, workflow=workflow, instruction=body.instruction
+    )
+    await db.commit()
+    generate_workflow_plan_task.delay(str(request.id))
+    return WorkflowGenerationRequestOut.model_validate(request, from_attributes=True)

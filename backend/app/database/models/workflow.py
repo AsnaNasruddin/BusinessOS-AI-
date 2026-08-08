@@ -22,6 +22,24 @@ class Workflow(Base):
     graph: Mapped[dict] = mapped_column(JSON, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    # manual (built in the visual editor) | generated (Phase 7 NL planner,
+    # never hand-edited since) | hybrid (started as one, a save from the
+    # other path touched it too) — a cheap, honest breadcrumb for "what
+    # fraction of generated workflows get hand-edited later," not an audit
+    # table of its own.
+    source: Mapped[str] = mapped_column(String(20), nullable=False, default="manual")
+    # `use_alter` because WorkflowGenerationRequest.target_workflow_id (below)
+    # points back at this table — a genuine circular FK between the two,
+    # resolved by deferring this specific constraint to a post-create ALTER
+    # TABLE rather than requiring the other table to already exist inline.
+    generation_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey(
+            "workflow_generation_requests.id",
+            use_alter=True,
+            name="fk_workflows_generation_request_id",
+        ),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()

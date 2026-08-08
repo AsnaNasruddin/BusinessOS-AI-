@@ -4,7 +4,9 @@ from collections.abc import Coroutine
 from typing import Any
 
 from app.config import get_settings
+from app.database.models import WorkflowGenerationRequest
 from app.database.session import async_session_maker, engine
+from app.services import workflow_generation_service
 from app.worker.celery_app import celery_app
 from app.workflows.executor import execute_workflow, resume_workflow
 
@@ -12,8 +14,7 @@ from app.workflows.executor import execute_workflow, resume_workflow
 @celery_app.task(name="ping")
 def ping() -> str:
     """Trivial task proving the worker container boots and can execute
-    something — real tasks (execute_workflow, generate_workflow_plan) land
-    here in their respective phases."""
+    something."""
     return "pong"
 
 
@@ -64,6 +65,32 @@ async def _resume_workflow_async(run_id: uuid.UUID, node_id: str) -> None:
     async with async_session_maker() as db:
         try:
             await resume_workflow(run_id, node_id, db, get_settings())
+            await db.commit()
+        except Exception:
+            await db.rollback()
+            raise
+
+
+@celery_app.task(name="generate_workflow_plan")
+def generate_workflow_plan_task(request_id: str, force_final: bool = False) -> None:
+    """Phase 7 — one planner round (app.workflow_generation.planner) per
+    task invocation. `POST /workflows/generate`, `.../answer` (once every
+    pending question is answered), and `.../compile` (forcing a final
+    round early) each enqueue this — never running the LLM call inline."""
+    asyncio.run(
+        _run_and_dispose(_generate_workflow_plan_async(uuid.UUID(request_id), force_final))
+    )
+
+
+async def _generate_workflow_plan_async(request_id: uuid.UUID, force_final: bool) -> None:
+    async with async_session_maker() as db:
+        try:
+            request = await db.get(WorkflowGenerationRequest, request_id)
+            if request is None:
+                return
+            await workflow_generation_service.run_generation_round(
+                db, request=request, settings=get_settings(), force_final=force_final
+            )
             await db.commit()
         except Exception:
             await db.rollback()

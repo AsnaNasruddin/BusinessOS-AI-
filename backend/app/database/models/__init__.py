@@ -10,6 +10,7 @@ from app.database.models.memory import AgentMemory
 from app.database.models.org import Membership, Organization
 from app.database.models.user import User
 from app.database.models.workflow import Workflow, WorkflowRun, WorkflowStep
+from app.database.models.workflow_generation import WorkflowGenerationRequest
 
 __all__ = [
     "Base",
@@ -24,4 +25,5 @@ __all__ = [
     "WorkflowStep",
     "Approval",
     "AgentMemory",
+    "WorkflowGenerationRequest",
 ]

@@ -36,9 +36,7 @@ CASES = yaml.safe_load(CASES_FILE.read_text())
 @pytest.mark.parametrize("case", CASES, ids=[c["name"] for c in CASES])
 async def test_case_compiles_to_expected_shape(case):
     async with async_session_maker() as db:
-        result = await db.execute(
-            select(Organization).where(Organization.name == "Acme Robotics")
-        )
+        result = await db.execute(select(Organization).where(Organization.name == "Acme Robotics"))
         org = result.scalar_one()
 
         plan = await generate_plan(
@@ -57,6 +55,5 @@ async def test_case_compiles_to_expected_shape(case):
         actual_kinds = Counter(n["type"] for n in graph["nodes"])
         expected_kinds = Counter(case["expected_node_kinds"])
         assert actual_kinds == expected_kinds, (
-            f"expected {expected_kinds}, got {actual_kinds}\n"
-            f"plan: {plan.model_dump_json(indent=2)}"
+            f"expected {expected_kinds}, got {actual_kinds}\nplan: {plan.model_dump_json(indent=2)}"
         )

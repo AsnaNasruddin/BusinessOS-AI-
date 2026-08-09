@@ -18,9 +18,7 @@ async def seeded(db_engine):
     against."""
     session_maker = async_sessionmaker(db_engine, expire_on_commit=False)
     async with session_maker() as db:
-        org = await org_service.create_org(
-            db, owner=await _make_user(db), name="Compiler Test Org"
-        )
+        org = await org_service.create_org(db, owner=await _make_user(db), name="Compiler Test Org")
         agent = await agent_service.create_agent(
             db,
             org_id=org.org.id,
@@ -46,7 +44,9 @@ async def _make_user(db):
     from app.services import auth_service
 
     user, _ = await auth_service.register_user(
-        db, email=f"{uuid.uuid4()}@example.com", password="correcthorsebatterystaple",
+        db,
+        email=f"{uuid.uuid4()}@example.com",
+        password="correcthorsebatterystaple",
         full_name="Compiler Tester",
     )
     return user

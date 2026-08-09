@@ -19,8 +19,10 @@ async def get_dashboard_stats(db: AsyncSession, *, org_id: uuid.UUID) -> Dashboa
     month_ago = now - timedelta(days=30)
 
     workflows = (
-        await db.execute(select(Workflow.is_active).where(Workflow.org_id == org_id))
-    ).scalars().all()
+        (await db.execute(select(Workflow.is_active).where(Workflow.org_id == org_id)))
+        .scalars()
+        .all()
+    )
     total_workflows = len(workflows)
     active_workflows = sum(1 for is_active in workflows if is_active)
 
@@ -33,14 +35,18 @@ async def get_dashboard_stats(db: AsyncSession, *, org_id: uuid.UUID) -> Dashboa
     ).scalar_one()
 
     week_statuses = (
-        await db.execute(
-            select(WorkflowRun.status).where(
-                WorkflowRun.org_id == org_id,
-                WorkflowRun.started_at >= week_ago,
-                WorkflowRun.status.in_(["succeeded", "failed"]),
+        (
+            await db.execute(
+                select(WorkflowRun.status).where(
+                    WorkflowRun.org_id == org_id,
+                    WorkflowRun.started_at >= week_ago,
+                    WorkflowRun.status.in_(["succeeded", "failed"]),
+                )
             )
         )
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
     success_rate_7d = (
         round(100 * sum(1 for s in week_statuses if s == "succeeded") / len(week_statuses), 1)
         if week_statuses

@@ -14,6 +14,7 @@ from app.services.security import (
     decode_invite_token,
     hash_password,
 )
+from app.workflow_generation.planner import ensure_planner_agent
 
 
 @dataclass
@@ -55,6 +56,12 @@ async def create_org(db: AsyncSession, *, owner: User, name: str) -> OrgWithRole
     membership = Membership(user_id=owner.id, org_id=org.id, role="owner")
     db.add(membership)
     await db.flush()
+
+    # Every org needs its own Workflow Planner agent for the NL workflow
+    # generator to work at all (§16.6) — seeded here, the one choke point
+    # every org-creation path (registration, POST /orgs) already goes
+    # through, so no org is ever silently missing it.
+    await ensure_planner_agent(db, org_id=org.id)
 
     return OrgWithRole(org=org, role="owner")
 

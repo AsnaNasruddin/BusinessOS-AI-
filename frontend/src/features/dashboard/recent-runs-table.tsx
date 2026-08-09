@@ -10,7 +10,7 @@ export function RecentRunsTable({ runs }: { runs: WorkflowRun[] }) {
       <div className="flex items-center justify-between px-[18px] pb-1 pt-4">
         <h2 className="text-sm font-semibold">Recent runs</h2>
         <span className="text-[11px] font-semibold uppercase tracking-wider text-fg-faint">
-          Last 24h
+          Most recent
         </span>
       </div>
       <Table>

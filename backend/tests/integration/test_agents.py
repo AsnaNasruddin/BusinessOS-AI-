@@ -27,11 +27,15 @@ _AGENT_PAYLOAD = {
 }
 
 
-async def test_list_agents_empty_initially(client):
+async def test_list_agents_has_only_the_auto_seeded_planner_initially(client):
+    """A brand-new org isn't literally agent-less: registration auto-seeds
+    a Workflow Planner (see auth_service.register_user) so the NL workflow
+    generator works out of the box, not just for hand-seeded demo orgs."""
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
     response = await client.get("/api/v1/agents", headers=_auth(token, org_id))
     assert response.status_code == 200
-    assert response.json() == []
+    names = [a["name"] for a in response.json()]
+    assert names == ["Workflow Planner"]
 
 
 async def test_create_and_get_agent(client):

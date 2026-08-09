@@ -15,7 +15,6 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-import app as app_package
 from app.config import get_settings
 from app.database.models import Approval, User
 from app.database.session import async_session_maker
@@ -32,17 +31,10 @@ from app.services import (
     workflow_generation_service,
     workflow_service,
 )
-from app.workflow_generation.planner import PLANNER_AGENT_NAME
+from app.workflow_generation.planner import PLANNER_AGENT_NAME, ensure_planner_agent
 from app.workflows.executor import execute_workflow, resume_workflow
 
 SEED_DATA_DIR = Path(__file__).parent.parent / "seed-data"
-# Resolved from the `app` package's own __file__ rather than a path relative
-# to this script — robust to this script running inside the backend
-# container (where backend/ is mounted AT /app, so "app/agents/..." from
-# the repo root would be wrong) or natively from the repo root.
-PLANNER_PROMPT_PATH = (
-    Path(app_package.__file__).parent / "agents" / "prompts" / "workflow_planner.md"
-)
 
 DEMO_EMAIL = "demo@businessos.ai"
 DEMO_PASSWORD = "Demo1234!"
@@ -158,30 +150,17 @@ async def create_demo_agents(org_id) -> None:
 
 
 async def create_planner_agent(org_id) -> None:
-    """Phase 7 (Natural Language Workflow Generator). Seeds the Workflow
-    Planner as an ordinary Agent row (§16.6) — its system prompt is long
-    enough to live in its own file (app/agents/prompts/workflow_planner.md)
-    rather than inline like DEMO_AGENTS above."""
+    """Phase 7 (Natural Language Workflow Generator). Every org gets a
+    Workflow Planner agent automatically at registration now (see
+    auth_service.register_user's ensure_planner_agent call) — this just
+    covers orgs seeded directly, bypassing that path."""
     async with async_session_maker() as db:
         existing_names = {a.name for a in await agent_service.list_agents(db, org_id=org_id)}
         if PLANNER_AGENT_NAME in existing_names:
             print(f"  agent '{PLANNER_AGENT_NAME}' already exists, reusing")
             return
 
-        await agent_service.create_agent(
-            db,
-            org_id=org_id,
-            data=AgentCreate(
-                name=PLANNER_AGENT_NAME,
-                description="Turns a plain-English request into a workflow plan.",
-                system_prompt=PLANNER_PROMPT_PATH.read_text(),
-                model_provider="ollama",
-                model_name="llama3.1:8b",
-                temperature=0.2,
-                allowed_tools=["list_agents", "list_tools", "list_knowledge_bases"],
-                memory_scope="none",
-            ),
-        )
+        await ensure_planner_agent(db, org_id=org_id)
         await db.commit()
         print(f"  created agent '{PLANNER_AGENT_NAME}'")
 

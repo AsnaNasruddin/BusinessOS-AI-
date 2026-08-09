@@ -22,3 +22,9 @@ export function formatDuration(startedAt: string, finishedAt: string | null): st
 export function formatLatency(ms: number): string {
   return `${ms.toLocaleString()}ms`
 }
+
+export function formatCompactNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(2)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`
+  return String(n)
+}

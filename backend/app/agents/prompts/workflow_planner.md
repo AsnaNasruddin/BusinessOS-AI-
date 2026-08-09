@@ -72,6 +72,30 @@ Each edge has `source_ref` and `target_ref` (matching node `ref`s). An edge
 leaving a `condition` node must set `branch` to `"yes"` or `"no"`. No other
 edge should set `branch`.
 
+## Editing an existing workflow
+
+If the request includes a line like "The workflow being edited currently
+looks like this:" followed by a list of steps, you're editing, not creating
+from scratch. Your `nodes`/`edges` must still describe the **complete
+desired end-state graph** — every step that should exist once the edit is
+done, not a diff of only what changed.
+
+- For every existing step you want to **keep**, add its own entry to
+  `nodes` with a fresh `ref` of your choosing (you're not told the
+  workflow's internal ids, so invent a short new one, e.g. `t`, `classify`)
+  and the **same `label` and `kind`** it's listed with — that's how the
+  compiler recognizes it's the same step rather than a new one.
+- For steps you want to **add**, add new node entries the normal way.
+- For steps you want to **remove**, simply leave them out of `nodes`.
+- **Never use an existing step's label as a `source_ref` or `target_ref`
+  directly.** Every ref used in `edges` — whether it points at a kept step
+  or a new one — must match a `ref` you declared in this plan's own `nodes`
+  list. If the existing workflow lists `- trigger: Weekly Kickoff`, you
+  must add `{"ref": "wk", "kind": "trigger", "label": "Weekly Kickoff", ...}`
+  to `nodes` before any edge can use `"wk"` as its `source_ref` — writing
+  `"source_ref": "Weekly Kickoff"` without a matching node entry is wrong
+  and will fail to compile.
+
 ## When you're missing something
 
 If the request needs an agent, tool, or knowledge base that doesn't exist and

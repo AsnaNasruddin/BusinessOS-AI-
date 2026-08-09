@@ -160,6 +160,7 @@ async def _drive(
         return any(e.id in active_edges for e in edges_in)
 
     total_tokens = run.total_tokens or 0
+    total_cost_usd = run.total_cost_usd or 0.0
 
     try:
         while True:
@@ -172,6 +173,7 @@ async def _drive(
                     run.context = context
                     run.active_edge_ids = list(active_edges)
                     run.total_tokens = total_tokens
+                    run.total_cost_usd = total_cost_usd
                     run.status = "awaiting_approval"
                     db.add(
                         Approval(
@@ -206,6 +208,7 @@ async def _drive(
                 )
                 completed.add(node.id)
                 total_tokens += step.tokens_used or 0
+                total_cost_usd += step.cost_usd
                 context[node.id] = step.output
                 for edge in outgoing[node.id]:
                     if taken_handles is None or edge.source_handle in taken_handles:
@@ -218,6 +221,7 @@ async def _drive(
         run.error_note = str(exc)
 
     run.total_tokens = total_tokens
+    run.total_cost_usd = total_cost_usd
     run.finished_at = datetime.now(UTC)
     run.context = context
     run.active_edge_ids = list(active_edges)

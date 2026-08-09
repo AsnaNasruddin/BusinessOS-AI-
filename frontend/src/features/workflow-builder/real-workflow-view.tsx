@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
   Background,
   BackgroundVariant,
@@ -16,6 +16,8 @@ import { RectNode } from '@/features/workflow-builder/nodes/rect-node'
 import { CircleNode } from '@/features/workflow-builder/nodes/circle-node'
 import { ConditionNode } from '@/features/workflow-builder/nodes/condition-node'
 import { graphToFlow } from '@/features/workflow-builder/graph-to-flow'
+import { NlEditBar } from '@/features/workflow-generator/nl-edit-bar'
+import { NlEditDiffCard } from '@/features/workflow-generator/nl-edit-diff-card'
 import { useWorkflow } from '@/hooks/use-workflows'
 import type { Workflow, WorkflowSource } from '@/types'
 
@@ -32,10 +34,10 @@ const SOURCE_LABEL: Record<WorkflowSource, { text: string; variant: 'neutral' | 
 }
 
 /** Renders a REAL, backend-compiled workflow (Phase 7's output, or any
- * workflow fetched by id) — read-only: no drag/save/run wiring yet, that
- * remains separate follow-up work. The point here is that a workflow the
- * planner generated is genuinely visible in this canvas, not just a JSON
- * summary on the describe-goal page. */
+ * workflow fetched by id) — read-only canvas (no drag/save/run wiring
+ * yet, that remains separate follow-up work), but natural-language
+ * *editing* (§16.11) is fully wired: the NlEditBar below kicks off a real
+ * diff-review-apply cycle against this workflow. */
 export function RealWorkflowView({ workflowId }: { workflowId: string }) {
   const { data: workflow, isLoading } = useWorkflow(workflowId)
 
@@ -50,9 +52,24 @@ function RealWorkflowCanvas({ workflow }: { workflow: Workflow }) {
   const { nodes: initialNodes, edges: initialEdges } = graphToFlow(
     workflow.graph ?? { nodes: [], edges: [] },
   )
-  const [nodes, , onNodesChange] = useNodesState(initialNodes)
-  const [edges] = useEdgesState(initialEdges)
+  const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes)
+  const [edges, setEdges] = useEdgesState(initialEdges)
   const [selected, setSelected] = useState<Record<string, unknown> | null>(null)
+  const [editRequestId, setEditRequestId] = useState<string | null>(null)
+
+  // The canvas mounts once per workflow id, but an applied NL edit bumps
+  // `version` and refetches the SAME workflow — re-derive the graph
+  // whenever that happens rather than only ever showing the graph as it
+  // was on first render.
+  useEffect(() => {
+    const { nodes: freshNodes, edges: freshEdges } = graphToFlow(
+      workflow.graph ?? { nodes: [], edges: [] },
+    )
+    setNodes(freshNodes)
+    setEdges(freshEdges)
+    setSelected(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workflow.id, workflow.version])
 
   const onNodeClick = useCallback<NodeMouseHandler<Node>>((_event, node) => {
     setSelected(node.data as Record<string, unknown>)
@@ -74,7 +91,18 @@ function RealWorkflowCanvas({ workflow }: { workflow: Workflow }) {
             <span>{workflow.isActive ? 'active' : 'inactive — review before activating'}</span>
           </div>
         </div>
+        <NlEditBar
+          workflowId={workflow.id}
+          disabled={Boolean(editRequestId)}
+          onStarted={setEditRequestId}
+        />
       </div>
+
+      {editRequestId && (
+        <div className="mb-4">
+          <NlEditDiffCard requestId={editRequestId} onResolved={() => setEditRequestId(null)} />
+        </div>
+      )}
 
       <div className="grid grid-cols-[minmax(0,1fr)_280px] items-start gap-4">
         <Card className="overflow-hidden">

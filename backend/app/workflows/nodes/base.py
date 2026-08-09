@@ -15,6 +15,9 @@ class StepResult:
     payload: dict | list | None
     note: str | None
     output: Any
+    # Only agent nodes ever set this (app.llm.pricing) — Ollama is always
+    # $0 (local), cloud providers get a real, if approximate, estimate.
+    cost_usd: float = 0.0
 
 
 class WorkflowExecutionError(Exception):

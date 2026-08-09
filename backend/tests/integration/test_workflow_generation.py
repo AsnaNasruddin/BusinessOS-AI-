@@ -7,7 +7,6 @@ import pytest
 from app.llm.base import LLMResponse
 from app.llm.ollama_provider import OllamaProvider
 from app.services import workflow_generation_service
-from app.workflow_generation.planner import PLANNER_AGENT_NAME
 
 
 async def _register_with_org(client, email, full_name):
@@ -25,23 +24,6 @@ def _auth(token, org_id=None):
     if org_id:
         headers["X-Org-Id"] = org_id
     return headers
-
-
-async def _create_planner_agent(client, token, org_id):
-    await client.post(
-        "/api/v1/agents",
-        json={
-            "name": PLANNER_AGENT_NAME,
-            "description": "test planner",
-            "system_prompt": "You plan workflows.",
-            "model_provider": "ollama",
-            "model_name": "llama3.1:8b",
-            "temperature": 0.2,
-            "allowed_tools": ["list_agents", "list_tools", "list_knowledge_bases"],
-            "memory_scope": "none",
-        },
-        headers=_auth(token, org_id),
-    )
 
 
 async def _create_agent(client, token, org_id, name="Support Agent"):
@@ -128,7 +110,6 @@ async def test_generate_with_no_questions_compiles_directly(
     client, run_pending_generation, planner_queue
 ):
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, token, org_id)
     agent = await _create_agent(client, token, org_id)
     planner_queue.append(_simple_plan(agent["name"]))
 
@@ -166,7 +147,6 @@ async def test_generate_with_no_questions_compiles_directly(
 
 async def test_clarifying_questions_loop(client, run_pending_generation, planner_queue):
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, token, org_id)
     agent = await _create_agent(client, token, org_id)
     planner_queue.append(
         {
@@ -216,7 +196,6 @@ async def test_round_cap_forces_a_final_plan_even_if_model_keeps_asking(
     keeps returning clarifying_questions on round 3, the service must
     still land on `ready` rather than asking forever."""
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, token, org_id)
     agent = await _create_agent(client, token, org_id)
     for _ in range(2):
         planner_queue.append(
@@ -264,7 +243,6 @@ async def test_missing_agent_reference_blocks_compile_until_created(
     client, run_pending_generation, planner_queue
 ):
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, token, org_id)
     plan = _simple_plan("Nonexistent Agent")
     planner_queue.append(plan)
 
@@ -298,7 +276,6 @@ async def test_missing_agent_reference_blocks_compile_until_created(
 
 async def test_edit_with_nl_produces_diff_then_apply(client, run_pending_generation, planner_queue):
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, token, org_id)
     agent = await _create_agent(client, token, org_id)
 
     workflow = (
@@ -351,7 +328,6 @@ async def test_edit_with_nl_produces_diff_then_apply(client, run_pending_generat
 
 async def test_reject_edit_leaves_workflow_untouched(client, run_pending_generation, planner_queue):
     token, org_id = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, token, org_id)
     agent = await _create_agent(client, token, org_id)
 
     workflow = (
@@ -388,7 +364,6 @@ async def test_reject_edit_leaves_workflow_untouched(client, run_pending_generat
 
 async def test_generation_request_is_org_scoped(client, planner_queue):
     owner_token, owner_org = await _register_with_org(client, "jordan@example.com", "Jordan Avery")
-    await _create_planner_agent(client, owner_token, owner_org)
     started = await client.post(
         "/api/v1/workflows/generate",
         json={"description": "x"},

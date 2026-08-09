@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.agents.runner import run_agent_test
 from app.config import Settings
 from app.database.models.agent import Agent
+from app.llm.pricing import estimate_cost_usd
 from app.workflows.graph import GraphNode
 from app.workflows.nodes.base import StepResult, WorkflowExecutionError
 
@@ -35,6 +36,7 @@ async def run(node: GraphNode, context: dict, db: AsyncSession, settings: Settin
         payload={"reply": response.content},
         note=None,
         output=response.content,
+        cost_usd=estimate_cost_usd(agent.model_provider, agent.model_name, response.tokens_used),
     )
 
 

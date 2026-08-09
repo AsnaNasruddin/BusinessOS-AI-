@@ -1,8 +1,40 @@
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+
+# Virtual Environments
 .venv/
+venv/
+env/
+ENV/
+
+# Python Bytecode & Caches
 __pycache__/
-*.pyc
+*.py[cod]
+*$py.class
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
 *.egg-info/
+.eggs/
+
+# Databases & Vector Stores
+*.db
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+*.db-journal
 businessos.db
-.env
+chroma_db/
+vectorstore/
+data/
+
+# Logs
+*.log
+logs/

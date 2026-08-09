@@ -1,23 +1,32 @@
-import { Button } from '@/components/ui/button'
+import { Link } from 'react-router-dom'
 import { useDashboardStats, useRecentRuns } from '@/hooks/use-dashboard'
-import { currentUser } from '@/lib/seed-data'
+import { useAuthStore } from '@/stores/auth-store'
 import { StatTile } from '@/features/dashboard/stat-tile'
 import { RecentRunsTable } from '@/features/dashboard/recent-runs-table'
 
 export function DashboardPage() {
   const { data: stats } = useDashboardStats()
   const { data: runs } = useRecentRuns()
+  const user = useAuthStore((s) => s.user)
+  const orgName = useAuthStore((s) => s.memberships.find((m) => m.orgId === s.currentOrgId)?.orgName)
 
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-end justify-between gap-5">
         <div>
-          <h1 className="text-[22px]">Good afternoon, {currentUser.fullName.split(' ')[0]}.</h1>
+          <h1 className="text-[22px]">
+            {user ? `Good to see you, ${user.fullName.split(' ')[0]}.` : 'Welcome back.'}
+          </h1>
           <div className="mt-1 text-[13px] text-fg-dim">
-            Here&rsquo;s what your agents did across Acme Robotics today.
+            Here&rsquo;s what your agents did across {orgName ?? 'your org'}.
           </div>
         </div>
-        <Button variant="primary">+ New workflow</Button>
+        <Link
+          to="/workflows/generate"
+          className="inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-signal-solid bg-signal-solid px-3.5 text-[13px] font-medium text-white transition-colors hover:border-signal-solid-hover hover:bg-signal-solid-hover"
+        >
+          ✨ New workflow
+        </Link>
       </div>
 
       {stats && (
@@ -33,23 +42,18 @@ export function DashboardPage() {
             value={String(stats.runs24h)}
             points={[20, 17, 18, 12, 13, 8, 6]}
             color="var(--signal)"
-            delta="↑ 18% vs yesterday"
-            deltaTone="up"
           />
           <StatTile
             label="Success rate · 7d"
             value={`${stats.successRate7d}%`}
             points={[10, 9, 12, 9, 7, 8, 6]}
             color="var(--good)"
-            delta="↑ 1.2pt"
-            deltaTone="up"
           />
           <StatTile
             label="Tokens · 30d"
             value={stats.tokens30d}
             points={[18, 16, 17, 11, 12, 9, 10]}
             color="var(--agent)"
-            delta="local + cloud"
           />
           <StatTile
             label="Est. cost · 30d"

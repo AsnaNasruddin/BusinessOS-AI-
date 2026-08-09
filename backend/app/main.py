@@ -1,6 +1,18 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.api.v1 import (
+    agents,
+    approvals,
+    auth,
+    dashboard,
+    kb,
+    orgs,
+    runs,
+    tools,
+    workflow_generation,
+    workflows,
+)
 from app.config import get_settings
 
 settings = get_settings()
@@ -31,8 +43,24 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-# Phase 1+ mounts routers here as they're built:
-#   from app.api.v1 import auth, orgs, agents, kb, tools
-#   from app.api.v1 import workflows, runs, approvals, dashboard, analytics
-#   app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-#   ...
+app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(orgs.router, prefix="/api/v1/orgs", tags=["orgs"])
+app.include_router(agents.router, prefix="/api/v1/agents", tags=["agents"])
+app.include_router(tools.router, prefix="/api/v1/tools", tags=["tools"])
+app.include_router(kb.router, prefix="/api/v1/kbs", tags=["knowledge-bases"])
+# workflow_generation BEFORE workflows: both mount at the same prefix, and
+# `/generate` must be matched before `/{workflow_id}` gets a chance to
+# capture "generate" as a workflow id — route order is registration order,
+# not specificity.
+app.include_router(
+    workflow_generation.router, prefix="/api/v1/workflows", tags=["workflow-generation"]
+)
+app.include_router(workflows.router, prefix="/api/v1/workflows", tags=["workflows"])
+app.include_router(runs.router, prefix="/api/v1/runs", tags=["runs"])
+app.include_router(approvals.router, prefix="/api/v1/approvals", tags=["approvals"])
+app.include_router(dashboard.router, prefix="/api/v1/dashboard", tags=["dashboard"])
+
+# Analytics is the one piece of the original Section-8 API surface that
+# still has no real backend — the Dashboard page doesn't need it and
+# nothing else references it yet.
+#   from app.api.v1 import analytics

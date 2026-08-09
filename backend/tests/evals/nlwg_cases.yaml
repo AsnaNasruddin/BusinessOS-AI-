@@ -1,0 +1,31 @@
+# Phase 7's eval set (addendum §16.15, §0.4) — sample descriptions paired
+# with the workflow *shape* they should compile to: a sequence of node
+# kinds, not exact wording. An LLM's phrasing varies run to run (node
+# labels, exact agent names it drafts), but a well-engineered prompt
+# should reliably produce the same structural shape for the same request.
+#
+# Run manually against a real model before each release — not part of the
+# fast/default test suite, since it needs a real Ollama running and the
+# seeded Acme Robotics demo org (scripts/seed_dev_data.py):
+#
+#   RUN_LLM_EVALS=1 pytest tests/evals/test_nlwg_eval.py -v
+
+- name: simple_agent_step
+  description: >
+    When a customer emails asking a general question, classify the email
+    using the Triage Classifier agent.
+  expected_node_kinds: [trigger, agent, end]
+
+- name: conditional_approval
+  description: >
+    When a customer emails a refund request, classify it with the Triage
+    Classifier, and if the refund is over $500 get a manager's approval
+    before logging it. Otherwise just log it.
+  expected_node_kinds: [trigger, agent, condition, approval, tool, end]
+
+- name: kb_lookup_then_reply
+  description: >
+    When someone asks a product question, look up the answer in our
+    Product Docs knowledge base, then draft a reply with the Draft Reply
+    Writer agent.
+  expected_node_kinds: [trigger, tool, agent, end]

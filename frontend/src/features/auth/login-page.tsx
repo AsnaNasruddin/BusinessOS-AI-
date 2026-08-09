@@ -1,10 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod'
+import { isAxiosError } from 'axios'
+import { useState } from 'react'
 import { useForm } from 'react-hook-form'
+import { Link, useNavigate } from 'react-router-dom'
 import { z } from 'zod'
 import { BrandMark } from '@/components/layout/icons'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { api, fetchProfile } from '@/lib/api'
+import { useAuthStore } from '@/stores/auth-store'
 
 const loginSchema = z.object({
   email: z.string().email('Enter a valid email address'),
@@ -14,16 +19,31 @@ const loginSchema = z.object({
 type LoginForm = z.infer<typeof loginSchema>
 
 export function LoginPage() {
+  const navigate = useNavigate()
+  const [formError, setFormError] = useState<string | null>(null)
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) })
 
-  // TODO(learning): wire to `api.post('/auth/login', data)` once Module 1 (Auth) has a backend.
   async function onSubmit(data: LoginForm) {
-    await new Promise((resolve) => setTimeout(resolve, 400))
-    console.info('login submitted', data)
+    setFormError(null)
+    try {
+      const { data: tokens } = await api.post('/auth/login', data)
+      useAuthStore.getState().setTokens(tokens.access_token, tokens.refresh_token)
+
+      const { user, memberships } = await fetchProfile()
+      useAuthStore.getState().setProfile(user, memberships)
+
+      navigate('/dashboard', { replace: true })
+    } catch (error) {
+      if (isAxiosError(error) && error.response?.status === 401) {
+        setFormError('Incorrect email or password.')
+      } else {
+        setFormError('Something went wrong — please try again.')
+      }
+    }
   }
 
   return (
@@ -53,10 +73,19 @@ export function LoginPage() {
             )}
           </div>
 
+          {formError && <p className="text-xs text-critical-text">{formError}</p>}
+
           <Button type="submit" variant="primary" disabled={isSubmitting} className="mt-1 w-full">
             {isSubmitting ? 'Signing in…' : 'Sign in'}
           </Button>
         </form>
+
+        <p className="mt-5 text-center text-[12.5px] text-fg-dim">
+          New to BusinessOS?{' '}
+          <Link to="/register" className="font-medium text-signal-ink hover:underline">
+            Create an account
+          </Link>
+        </p>
       </Card>
     </div>
   )

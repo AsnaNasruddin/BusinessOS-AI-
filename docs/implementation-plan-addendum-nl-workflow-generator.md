@@ -14,6 +14,17 @@ The Natural Language Workflow Generator (from here, **NLWG**) is a planning laye
 in front of the existing engine. It never introduces a second workflow
 representation, a second execution path, or a way to skip human review.
 
+> **Reconciliation note (2026-08-05):** this addendum was written before any backend
+> code existed. Phases 1-3 are now real, implemented systems, and this pass updates
+> naming below to match what was actually built (`allowed_tools`, not
+> `allowed_tool_ids`; `app.llm.factory.get_llm_provider(...).complete(...)`, not
+> `LLMClient.chat()`). It also surfaces one real gap this reconciliation found: §16.2
+> and §16.6 originally assumed agents already run through a tool-calling
+> `AgentExecutor.run()` loop. **That doesn't exist yet** — Phase 2 shipped only a
+> single-shot completion path (`app.agents.runner.run_agent_test()`, system prompt +
+> one message → one reply, no tool use). A real tool-calling agent loop is now a
+> concrete, named prerequisite for Phase 7 — see the callout in §16.2.
+
 ---
 
 ## 0. Update Summary — what changes where
@@ -23,7 +34,7 @@ representation, a second execution path, or a way to skip human review.
 | 1. Project Identity | No change. |
 | 2. Learning Goals | No change to the list. NLWG is the feature that exercises nearly all twelve at once — see §16.17. |
 | 3. Non-Goals | **Add two bullets** — see §0.1. |
-| 4. Technology Stack | No new dependencies. Reuses `LLMClient`, Pydantic v2, Celery, `simpleeval`. |
+| 4. Technology Stack | No new dependencies. Reuses `app.llm` (`get_llm_provider(...).complete(...)`), Pydantic v2, Celery, `simpleeval`. |
 | 5. High-Level Architecture | **Insert** a "Workflow Generation Layer" between the API and the Agent Runtime in the diagram; **add** architectural principle 6 — see §16.2. |
 | 6. Data Model | **Add** `WorkflowGenerationRequest` table; **add** two columns to `Workflow` — see §16.4. |
 | 7. Module-by-Module Specification | **Insert new Module 4.5** — see §16 in full. |
@@ -145,7 +156,7 @@ User
  ▼
 ┌─────────────────────────────────────────────┐
 │ Workflow Generation Layer (NEW)              │
-│  • Planner Agent (LLMClient, tool-using)     │
+│  • Planner Agent (app.llm provider, tool-using)     │
 │  • Clarifying-question loop                  │
 │  • IR → Graph compiler (deterministic)       │
 │  • Graph validator (SHARED with manual path) │
@@ -172,9 +183,21 @@ write access to `is_active`, and it never calls `execute_workflow` directly.
 
 The Planner Agent is an `Agent` row like any other (Module 5) — it has a
 `system_prompt`, a `model_provider`/`model_name`, a `temperature`, and (critically)
-an `allowed_tool_ids` list containing three new **read-only** tools (§16.9). It runs
-through `AgentExecutor.run()` like every other agent in the system — no bespoke
-execution path.
+an `allowed_tools` list (list of tool *names*, matching the real Phase 2 schema —
+tools are a static code registry, `app/tools/builtins/registry.py`, not DB rows with
+their own IDs) containing three new **read-only** tools (§16.9).
+
+> **Prerequisite gap, found on reconciliation:** this paragraph originally said the
+> planner "runs through `AgentExecutor.run()` like every other agent in the system —
+> no bespoke execution path," assuming agents could already call tools in a loop.
+> Phase 2 did not build that — `app.agents.runner.run_agent_test()` is a single
+> system-prompt-plus-message completion, nothing more. Before Phase 7 can start, an
+> `AgentExecutor` (or equivalent) that gives an agent an actual tool-call loop —
+> propose a tool call → execute it → feed the result back → repeat until the model
+> returns a final answer — needs to exist. The natural place for this to land is
+> Phase 4 (Workflow engine v0), since an `agent` node running inside a live workflow
+> needs exactly the same capability the planner agent needs here; if Phase 4 doesn't
+> end up producing a reusable executor, it must be built explicitly as Phase 7 prep.
 
 ### 16.3 UX Flow → Screens
 
@@ -293,7 +316,7 @@ class WorkflowPlan(BaseModel):
     clarifying_questions: list[str] = []  # non-empty ⇒ plan is a draft, not final (§16.7)
 ```
 
-This is passed as the `response_format` (structured output) to `LLMClient.chat()` —
+This is passed as the `response_format` (structured output) to `get_llm_provider(...).complete(...)` —
 the same mechanism every other agent in the system uses for JSON-validated output
 (Section 2, learning goal 3). No new LLM plumbing.
 
@@ -302,7 +325,7 @@ the same mechanism every other agent in the system uses for JSON-validated outpu
 An ordinary `Agent` row, seeded at install time (like the demo org's other seed
 data), with three properties worth calling out:
 
-1. **Read-only tools.** `allowed_tool_ids` includes three new built-in tools
+1. **Read-only tools.** `allowed_tools` includes three new built-in tools
    (Module 8 pattern — `backend/app/tools/builtins/`), each a thin, read-only
    wrapper over an existing `scoped_query()`:
    - `list_agents(org_id)` → `[{name, description, allowed_tools}]`
@@ -466,17 +489,25 @@ architectural principle 1 — unchanged, just applied here too).
 
 ### 16.13 Backend Service Layout (addition to Section 10)
 
+> Updated on reconciliation to match the real Phase 1-3 convention: domain/runtime
+> logic lives in its own top-level package (`app/llm/`, `app/rag/`, `app/tools/`,
+> `app/agents/` all already follow this), separate from `app/schemas/` (Pydantic I/O
+> shapes) and `app/services/` (thin CRUD, e.g. `agent_service.py`, `kb_service.py`).
+> The original draft nested everything under `app/services/workflow_generation/`,
+> which doesn't match how Phases 1-3 actually split things up.
+
 ```
 backend/app/
 ├── api/v1/
 │   └── workflow_generation.py
-├── services/
-│   └── workflow_generation/
-│       ├── planner.py          # builds context, calls AgentExecutor.run() for the planner agent
-│       ├── schemas.py          # WorkflowPlan, PlanNode, PlanEdge, WorkflowDiff, etc. (§16.5, §16.11)
-│       ├── compiler.py         # compile_plan_to_graph() (§16.8) — pure, no LLM
-│       ├── diff.py             # compute_graph_diff() (§16.11) — pure, no LLM
-│       └── validator_bridge.py # thin wrapper calling the EXISTING workflows/graph.py validator
+├── schemas/
+│   └── workflow_generation.py  # WorkflowPlan, PlanNode, PlanEdge, WorkflowDiff, etc. (§16.5, §16.11)
+├── workflow_generation/         # NEW top-level package, sibling to app/llm, app/rag, app/tools
+│   ├── planner.py               # builds context, runs the planner Agent (needs the
+│   │                            # AgentExecutor tool-loop flagged in §16.2)
+│   ├── compiler.py              # compile_plan_to_graph() (§16.8) — pure, no LLM
+│   ├── diff.py                  # compute_graph_diff() (§16.11) — pure, no LLM
+│   └── validator_bridge.py      # thin wrapper calling the EXISTING workflows/graph.py validator
 ├── agents/prompts/
 │   └── workflow_planner.md     # the planner agent's system prompt template
 ├── tools/builtins/
@@ -542,7 +573,7 @@ specifically:
 4. **Rate-limit generation requests** per org (simple counter, reuse whatever
    throttling the Celery broker config already supports) — a chat-shaped input box
    is the most abuse-prone surface in the product.
-5. **The planner's `allowed_tool_ids` is read-only, by construction.** It is never
+5. **The planner's `allowed_tools` is read-only, by construction.** It is never
    granted `send_email`, `http_request`, or any state-changing tool — it plans
    workflows, it does not run them.
 

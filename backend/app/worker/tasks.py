@@ -77,9 +77,7 @@ def generate_workflow_plan_task(request_id: str, force_final: bool = False) -> N
     task invocation. `POST /workflows/generate`, `.../answer` (once every
     pending question is answered), and `.../compile` (forcing a final
     round early) each enqueue this — never running the LLM call inline."""
-    asyncio.run(
-        _run_and_dispose(_generate_workflow_plan_async(uuid.UUID(request_id), force_final))
-    )
+    asyncio.run(_run_and_dispose(_generate_workflow_plan_async(uuid.UUID(request_id), force_final)))
 
 
 async def _generate_workflow_plan_async(request_id: uuid.UUID, force_final: bool) -> None:

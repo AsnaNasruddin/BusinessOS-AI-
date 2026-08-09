@@ -114,10 +114,6 @@ async def test_stats_are_org_scoped(client):
         headers=_auth(owner_token, owner_org),
     )
 
-    outsider_token, outsider_org = await _register_with_org(
-        client, "sam@example.com", "Sam Rivera"
-    )
-    resp = await client.get(
-        "/api/v1/dashboard/stats", headers=_auth(outsider_token, outsider_org)
-    )
+    outsider_token, outsider_org = await _register_with_org(client, "sam@example.com", "Sam Rivera")
+    resp = await client.get("/api/v1/dashboard/stats", headers=_auth(outsider_token, outsider_org))
     assert resp.json()["total_workflows"] == 0

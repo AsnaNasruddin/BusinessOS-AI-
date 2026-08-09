@@ -12,8 +12,7 @@ from app.tools.builtins.registry import list_tools as list_builtin_tools
 SPEC = ToolSpec(
     name="list_tools",
     description=(
-        "Lists the built-in tools available to wire into a workflow (e.g. "
-        "search_kb, send_email)."
+        "Lists the built-in tools available to wire into a workflow (e.g. search_kb, send_email)."
     ),
     parameters={"type": "object", "properties": {}, "required": []},
 )
